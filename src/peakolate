@@ -1,0 +1,858 @@
+#!/usr/bin/env python
+
+#
+#                                   _         _       _             
+#                  _ __   ___  __ _| | _____ | | __ _| |_ ___  _ __ 
+#                 | '_ \ / _ \/ _` | |/ / _ \| |/ _` | __/ _ \| '__|
+#                 | |_) |  __/ (_| |   < (_) | | (_| | || (_) | |   
+#                 | .__/ \___|\__,_|_|\_\___/|_|\__,_|\__\___/|_|   
+#                 |_|     
+#
+#                                      ~~~
+#
+#                          Finding enriched regions in 
+#                          high-throughput sequencing data.
+#
+#                                      ~~~
+#
+#                                  August, 2010
+#
+#                                 Daniel Jones
+#                           <dcjones@cs.washington.edu>
+
+
+import time
+import peakolator
+import optparse
+import operator
+import re
+import random
+import bisect
+import Queue
+import multiprocessing
+from Queue           import Empty
+from collections     import defaultdict, namedtuple
+from sys             import argv, stderr, stdout, stdin
+from os.path         import isfile
+from multiprocessing import Process, Queue, JoinableQueue
+from functools       import partial
+from itertools       import izip
+
+
+
+# For debugging. Pretend to be a joinable queue
+class dummy_queue:
+
+    def empty(self):
+        return len(self.xs) == 0
+
+    def join(self):
+        pass
+
+    def __init__(self):
+        self.xs = list()
+
+    def put(self,x):
+        self.xs.append(x)
+
+    def get(self, block = True, timeout = 0 ):
+        return self.xs.pop()
+
+    def task_done(self):
+        pass
+
+
+#
+# This really should exist in the standard library
+#
+class weighted_choice:
+    def __init__( self, xs, ws ):
+        assert len(xs) == len(ws)
+
+        self.ws = [0] * len(xs)
+        total = sum(ws)
+        accum = 0
+        for (i,w) in enumerate(ws):
+            accum += w/total if total != 0 else 0
+            self.ws[i] = accum
+
+        self.xs = xs
+
+    def choose( self ):
+        i = bisect.bisect_left( self.ws, random.uniform(0,1) )
+        if i >= len(self.xs):
+            return self.xs[-1]
+        else:
+            return self.xs[i]
+
+
+
+
+#
+# SECTION I: Program Options
+#
+#
+usage = '%prog [options] reads.bam'
+
+option_list = [
+    optparse.make_option( '-S', '--unstranded', \
+                           dest='stranded', action='store_false', default=True, \
+                           help='reads are not strand specific' ),
+    optparse.make_option( '-p', \
+                           dest='num_procs', action='store', default=1, \
+                           metavar='N', type='int', \
+                           help='number a processes to run concurrently' ),
+    optparse.make_option( '-i', '--ignore',
+                          dest='blacklist', action='append', \
+                          metavar='file_name', default=[],
+                          help='completely ignore all the regions in the given gtf or bed file' ),
+    optparse.make_option( '-I', '--ignore-null', \
+                          dest='greylist', action='append', \
+                          metavar='file_name', default=[],
+                          help='ignore all the regions in the given gtf or bed\n'
+                               'file when training the null model.' ),
+    optparse.make_option( '-a', '--annotation',
+                          dest='annotations', action='append', \
+                          metavar='file_name', default=[],
+                          help='consider the genes annoteted in gtf file \'file_name\'' ),
+    optparse.make_option( '-B', '--bias-correction', action= 'store', default=None,
+                          type='str', metavar='ref.fasta', dest='ref_fn',
+                          help='perform bias correction using the given reference sequence' ),
+    optparse.make_option( '-L', dest='L', action='store',
+                          default=1, metavar='N', type='int',
+                          help='consider bios up to N nucleotides to the left of the read' ),
+    optparse.make_option( '-R', dest='R', action='store',
+                          default=10, metavar='N', type='int',
+                          help='consider bios up to N nucleotides to the right of the read' ),
+    optparse.make_option( '-k', dest='k', action='store',
+                          default=5, metavar='N', type='int',
+                          help='bias correction should use N-order estimation of sequence probabilities' ),
+    optparse.make_option( '--skip-intergenic', dest='scan_intergenic',
+                          action='store_false', default=True,
+                          help='do not scan intergenic regions' ),
+    optparse.make_option( '--skip-intronic', dest='scan_intronic',
+                          action='store_false', default=True,
+                          help='do not scan intronic regions' ),
+    optparse.make_option( '--debug', dest='debug_mode',
+                          action='store_true', default=False,
+                          help='run without launching multiple processes (useful for debugging)' )
+
+    ]
+
+
+
+
+
+#
+# SECTION II: Annotation Juggling
+#
+
+
+gtf_row = namedtuple( 'gtf_row', 'seqname source feature start end ' \
+                                 'score strand frame attributes' )
+
+def gtf_row_from_gtf_line( line ):
+    line = line.split('\t')
+    if len(line) < 9:
+        raise TypeError
+
+    seqname = line[0]
+    source  = line[1]
+    feature = line[2]
+
+    # gff/gtf is 1-based, end-inclusive
+    start   = int(line[3])-1
+    end     = int(line[4])-1
+
+    score   = line[5]
+    if line[6] == '+':
+        strand = 0
+    elif line[6] == '-':
+        strand = 1
+    else:
+        strand = -1
+    frame      = line[7]
+    attributes = {}
+
+    for mat in re.finditer( r'\s*(\w+)\s+(([\.\w]+)|"([\.\w]+)")\s*;', line[8] ):
+        attributes[mat.group(1)] = mat.group(2).strip('"')
+
+    return gtf_row( seqname, source, feature, \
+                    start, end, score, strand, frame, \
+                    attributes )
+
+
+
+def gtf_row_from_bed_line( line ):
+    line = line.split('\t')
+    if len(line) < 3:
+        raise TypeError
+
+    seqname = line[0]
+
+    # bed is 0-based, end-exclusive
+    start   = int(line[1])
+    end     = int(line[2])-1
+
+    name   = line[3] if len(line) > 3 else ''
+    score  = line[4] if len(line) > 4 else ''
+    strand = line[5] if len(line) > 5 else ''
+    if strand == '+':
+        strand = 0
+    elif strand == '-':
+        strand = 1
+    else:
+        strand = -1
+
+    return gtf_row( seqname, '', name, start, end, score, strand, '', {} )
+
+
+
+
+def parse_gtf_bed( fn ):
+    ''' try to determine the filetype and then parse it '''
+
+    if re.search( 'bed$', fn ):
+        return parse_bed( fn )
+    if re.search( 'gtf$', fn ):
+        return parse_gtf( fn )
+
+    return parse_bed( fn )
+
+
+
+def parse_gtf( gtf_fn, row_filter=lambda row: row.feature == 'exon' ):
+    ''' extract annotations from a gtf file '''
+
+    stderr.write( 'parsing %s ... ' % gtf_fn )
+
+    rows = []
+    i = 0
+    for line in open(gtf_fn):
+        i+=1
+
+        try:
+            row = gtf_row_from_gtf_line( line )
+        except TypeError:
+            stderr.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
+                          (len(line.split('\t')), i, gtf_fn) )
+            continue
+
+        if row_filter(row):
+            rows.append( row )
+
+    stderr.write( 'done (%d annotations).\n' % len(rows) )
+
+    return rows
+
+
+
+
+def parse_bed( bed_fn ):
+    ''' extract annotations from a bed file '''
+
+    stderr.write( 'parsing %s ... ' % bed_fn )
+
+    rows = []
+    i = 0
+    for line in open(bed_fn):
+        i+=1
+
+        try:
+            row = gtf_row_from_bed_line( line )
+        except TypeError:
+            stderr.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
+                          (len(line.split('\t')), i, gtf_fn) )
+            continue
+
+        rows.append(row)
+
+    stderr.write( 'done (%d annotations).\n' % len(rows) )
+
+    return rows
+
+
+
+def gtf_intersect_rows( rows1, rows2, stranded = True ):
+    ''' Perform a basewise intersection of two list of rows, producing a third
+    that contains only intervals present in both sets. '''
+
+    if stranded:
+        key = lambda row: (row.strand, row.seqname)
+    else:
+        key = lambda row: row.seqname
+
+    rows3 = []
+
+    rows1.sort( key = lambda row: row.start )
+    rows2.sort( key = lambda row: row.start )
+    rows1.sort( key = key )
+    rows2.sort( key = key )
+
+    (i,j) = (0,0)
+    while i < len(rows1) and j < len(rows2):
+        if key(rows1[i]) < key(rows2[j]):
+            i += 1
+        elif key(rows1[i]) > key(rows2[j]):
+            j += 1
+        elif rows1[i].end < rows2[j].start:
+            i += 1
+        elif rows1[i].start > rows2[j].end:
+            j += 1
+        else: # intersection case
+            row = gtf_row( seqname    = rows1[i].seqname,
+                           source     = rows1[i].source,
+                           feature    = rows1[i].feature,
+                           start      = max( rows1[i].start, rows2[j].start ),
+                           end        = min( rows1[i].end,   rows2[j].end ),
+                           score      = rows1[i].score,
+                           strand     = rows1[i].strand,
+                           frame      = rows1[i].frame,
+                           attributes = rows1[i].attributes )
+
+            if rows1[i].end < rows2[j].end:
+                i += 1
+            elif rows1[i].end > rows2[j].end:
+                j += 1
+            else:
+                i += 1
+                j += 1
+
+            rows3.append(row)
+
+    return rows3
+
+
+
+
+def get_constitutive_exons( rows, stranded = True ):
+    ''' A dictionary mappin gene_id's to gtf_rows representing exonic intervals
+    that are present in every isoform of the gene.'''
+
+    stderr.write( 'getting genes and transcripts ... ' )
+
+    genes       = defaultdict(set)
+    transcripts = defaultdict(list)
+
+    for row in rows:
+        if 'transcript_id' not in row.attributes or \
+                 'gene_id' not in row.attributes:
+            continue
+
+        transcript_id = row.attributes['transcript_id']
+        gene_id       = row.attributes['gene_id']
+
+        genes[gene_id].add( transcript_id )
+        transcripts[transcript_id].append( row )
+
+    stderr.write( 'done. (%d genes, %d transcripts)\n' % (len(genes), len(transcripts) ) )
+
+    stderr.write( 'getting constitutive exons ... ' )
+
+    exons = {}
+
+    for gene_id in genes:
+        intersect = partial( gtf_intersect_rows, stranded = stranded )
+        exons[gene_id] = reduce( intersect, [ transcripts[id] for id in genes[gene_id] ] )
+
+    stderr.write( 'done. (%d constitutive exons)\n' % \
+                    sum( map( len, exons.itervalues() ) ) )
+
+    return exons
+
+
+def get_constitutive_introns( rows, stranded = True ):
+    ''' Return a dictionary mapping gene_id's to a gtf_rows representing
+    intronic intervals present in at least one isoform of a gene and not
+    overlapping any exon from any gene. '''
+
+    stderr.write( 'getting constitutive introns ... ' )
+
+    if stranded:
+        key = lambda row: (row.strand, row.seqname, row.start, row.end)
+    else:
+        key = lambda row: (row.seqname, row.start, row.end)
+
+    rows.sort( key = key )
+
+    # count rows in each gene
+    num_exons = defaultdict( lambda: 0 )
+    for row in rows:
+        if 'gene_id' in row.attributes:
+            gene_id = row.attributes['gene_id']
+            num_exons[gene_id] += 1
+
+
+    # find constitutive introns
+    introns   = defaultdict(list)
+    curr_gene = []
+
+    for (row1,row2) in izip( rows[:-1], rows[1:] ):
+        if 'gene_id' in row1.attributes:
+            gene_id = row1.attributes['gene_id']
+            num_exons[gene_id] -= 1
+            if not curr_gene or curr_gene[-1] != gene_id:
+                curr_gene.append(gene_id)
+
+            while curr_gene and num_exons[curr_gene[-1]] == 0:
+                    curr_gene.pop()
+
+        if row1.seqname != row2.seqname or \
+           (stranded and row1.strand != row2.strand):
+           continue
+
+
+        # either ambiguous intron or outside of any gene
+        if len(curr_gene) > 1 or len(curr_gene) == 0:
+            continue
+
+        if row1.end < row2.start:
+            row = gtf_row( seqname    = row1.seqname,
+                           source     = row1.source,
+                           feature    = row1.feature,
+                           start      = row1.end+1,
+                           end        = row2.start-1,
+                           score      = row1.score,
+                           strand     = row1.strand,
+                           frame      = row1.frame,
+                           attributes = row1.attributes )
+
+            introns[curr_gene[-1]].append(row)
+
+    stderr.write( 'done. (%d constitutive introns)\n' % \
+            sum( map( len, introns.itervalues() ) ) )
+
+    return introns
+
+
+
+def min_start_max_end( rows ):
+    ''' return the minimum start and maximum end in a list of rows '''
+
+    min_start = rows[0].start
+    max_end   = rows[0].end
+    for row in rows:
+        if row.start < min_start:
+            min_start = row.start
+        if row.end > max_end:
+            max_end   = row.end
+
+    return (min_start,max_end)
+
+
+
+def get_transcript_extents( rows ):
+    ''' return a dictionary of sorted intervals for each chromosome, containing
+    the extents of each transcript '''
+
+    stderr.write( 'getting transcript extents ... ' )
+
+    # organize rows by transcript
+    dummy_trans  = 1
+    transcripts = defaultdict(list)
+    for row in rows:
+        if 'transcript_id' in row.attributes:
+            transcripts[row.attributes['transcript_id']].append( row )
+        else:
+            transcripts['dummy_%d' % dummy_trans].append( row )
+            dummy_trans += 1
+
+
+    # get the extents of each transcript
+    n = 1
+    intervals = defaultdict(list)
+    for transcript in transcripts.itervalues():
+        transcript_intervals = defaultdict(list)
+        k = 0
+        for row in transcript:
+            transcript_intervals[(row.seqname,row.strand)].append( row )
+
+        for (seqname,strand) in transcript_intervals:
+            (min_start,max_end) = min_start_max_end( transcript_intervals[(seqname,strand)] )
+            k+=1
+            intervals[seqname].append( (min_start,max_end,strand) )
+        n += k
+
+    # sort
+    for seqname in intervals:
+        intervals[seqname].sort( key = lambda x: x[0] )
+
+    stderr.write( 'done (%d transcripts)\n' % sum(map(len,intervals.itervalues())) )
+
+    return intervals
+
+
+
+def get_interval_gaps( intervals, chrom_sizes, stranded ):
+    ''' get all the intervals, not covered by the provided intervals '''
+
+    stderr.write( 'getting intergenic regions ... ' )
+
+    gaps = defaultdict(list)
+
+
+    for seqname in intervals:
+        if seqname not in chrom_sizes: continue
+
+        for s in ((0,1) if stranded else (-1,)):
+            prev_end = -1
+            for (start,end,strand) in intervals[seqname]:
+                if s != -1 and strand != -1 and s != strand: continue
+                if prev_end+1 < start:
+                    gaps[seqname].append( (prev_end+1,start-1,s) )
+                prev_end = max( prev_end, end )
+
+            if seqname in chrom_sizes and prev_end+1 < chrom_sizes[seqname]:
+                gaps[seqname].append( (prev_end+1,chrom_sizes[seqname]-1,s) )
+
+    stderr.write( 'done (%d regions)\n' % sum(map(len,gaps.itervalues())) )
+
+    return gaps
+
+
+
+
+#
+# SECTION IV: Searching Intergenic Regions
+#
+#
+
+# training the model to randomly selected intergenic regions
+def peakolate( region_queue, prediction_queue, data, params ):
+    ''' one peakolator process: take regions off the queue, build the model and
+    scan, pushing predictions onto another queue. '''
+
+    ctx = peakolator.context()
+
+    for R in iter(region_queue.get,None):
+
+        (seqname,start,end,strand) = R
+
+        stderr.write( 'got one of length %d.\n' % (end-start+1) )
+
+        ctx.set( data, seqname, start, end, strand )
+
+        M = peakolator.model( params, ctx )
+
+        for I in M.run():
+            prediction_queue.put(
+                    (I.seqname, I.start, I.end,
+                     I.strand, I.pval, 'peakolator_intergenic' ) )
+
+        region_queue.task_done()
+
+    region_queue.task_done() # complete the None task
+
+
+
+def peakolate_intron( gene_queue, prediction_queue, data, params ):
+    ''' a specialized peakolator process to scan introns, recalibrating the
+    model to the gene's constitutive exons. '''
+
+    r = params.r
+    p = params.p
+    mu = r * ( 1 - p ) / p
+
+    ctx = peakolator.context()
+
+    for R in iter(gene_queue.get,None):
+        (exons,introns) = R
+
+        if len(introns) == 0 or len(exons) == 0:
+            gene_queue.task_done()
+            continue
+
+        gene_id = introns[0].attributes['gene_id']
+
+        stderr.write( 'got gene "%s" with %d introns.\n' % (gene_id, len(introns) ) )
+
+        exonic_rate  = 0
+        exonic_count = 0
+        exonic_len   = 0
+        for exon in exons:
+            ctx.set( data, exon.seqname, exon.start, exon.end, exon.strand )
+            exonic_rate  += ctx.rate()
+            exonic_count += ctx.count()
+            exonic_len   += exon.end - exon.start + 1
+
+        # skip over genes with exons that are too short to accurately calibrate
+        # the model
+        if exonic_len < 150:
+            gene_queue.task_done()
+            continue
+
+
+        # scale model parameter to adjust expectation to that of constitutive
+        # exons, and rebuild a (small) lookup table
+        gamma = 2.0
+        params.r = r * max( 1.0, gamma * (exonic_count / exonic_rate) / mu )
+        params.rebuild_lookup( 500, 10 )
+
+        for intron in introns:
+            ctx.set( data, intron.seqname, intron.start, intron.end, intron.strand )
+            M = peakolator.model( params, ctx )
+            for I in M.run():
+                prediction_queue.put(
+                        (I.seqname, I.start, I.end,
+                         I.strand, I.pval, 'peakolator_intronic' ) )
+
+
+        gene_queue.task_done()
+
+    gene_queue.task_done() # complete the None task
+
+
+def print_predictions( prediction_queue, f_out ):
+    ''' A process that prints any predictions it finds on the queue. This way we
+    get results immediately. '''
+
+    for prediction in iter(prediction_queue.get,None):
+        (seqname,start,end,strand,pval,name) = prediction
+
+        f_out.write( '{chrom}\t{start}\t{end}\t{name}\t{score}'.format(
+            chrom = seqname,
+            start = start,
+            end   = end+1,   # adjust for end-exclusiveness of bed
+            name  = name,
+            score = pval ) )
+        if strand >= 0:
+            f_out.write( '\t%s' % ('+' if strand == 0 else '-') )
+        f_out.write( '\n' )
+        f_out.flush()
+        prediction_queue.task_done()
+
+    prediction_queue.task_done() # complete the None task
+    stderr.write( '(print_preditions) process terminated\n' )
+
+
+def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
+    ''' given a big set of regions, choose some random exmaple regions on which
+    to train the null model. '''
+
+
+    # Avoid sampling regions very near to known genes. These regions are always
+    # enriched with reads. So constrict the defined intergenic regions.
+
+    m = 5000
+
+    regions = defaultdict(list)
+
+    for seqname in orig_regions:
+        for (start,end,strand) in orig_regions[seqname]:
+
+            if not stranded: strand = -1
+
+            if end-start+1 > 2*m+d:
+                regions[seqname].append( (start+m,end-m,strand) )
+
+
+
+    # the idea here is to do true uniform sampling by choosing a chromosome in
+    # proportion to it's length, then choose a region proportionally to it's
+    # length
+
+    seqs = regions.keys()
+    seq_weights = []
+    for seqname in seqs:
+        seq_weights.append( sum( end-start+1 for (start,end,strand) in regions[seqname]) )
+
+    seq_chooser = weighted_choice( seqs, seq_weights )
+
+    region_choosers = {}
+    for seqname in seqs:
+        ws = [ (end-start+1 if end-start+1 >= d else 0) \
+             for (start,end,strand) in regions[seqname] ]
+        region_choosers[seqname] = weighted_choice( regions[seqname], ws )
+
+    train = []
+    while len(train) < n:
+        seqname = seq_chooser.choose()
+        (start,end,strand) = region_choosers[seqname].choose()
+
+        if end-start+1 < d: continue # shouldn't happen, but just in case
+
+        i = int(random.uniform( 0, end-(d-1) ))
+
+        train.append( peakolator.interval( seqname, i, i+(d-1), strand ) )
+
+
+    return train
+
+
+
+
+
+#
+# SECTION V: Main
+#
+#
+
+def main():
+    opt_parser = optparse.OptionParser( usage = usage, option_list = option_list )
+    (options,args) = opt_parser.parse_args()
+
+    if len(args) == 0:
+        opt_parser.error( 'specify reads file' )
+    if len(args) > 1:
+        opt_parser.error( 'too many arguments given' )
+
+    reads_fn = args[0]
+    if not isfile(reads_fn):
+        stderr.write( 'Can\'t open file %s.\n' % reads_fn )
+        exit(1)
+
+
+
+    # load annotations
+    chrom_sizes = peakolator.get_chrom_sizes_from_bam( reads_fn )
+
+    blacklist_rows       = reduce( operator.add, map( parse_gtf_bed, options.blacklist ), [] )
+    greylist_rows        = reduce( operator.add, map( parse_gtf_bed, options.greylist ), [] )
+    annotation_rows      = reduce( operator.add, map( parse_gtf_bed, options.annotations ), [] )
+    transcript_extents   = get_transcript_extents( annotation_rows + blacklist_rows )
+    intergenic           = get_interval_gaps( transcript_extents, \
+                                              chrom_sizes, \
+                                              stranded = options.stranded )
+
+    greylist_transcript_extents = get_transcript_extents( annotation_rows + blacklist_rows + greylist_rows )
+    greylist_intergenic         = get_interval_gaps( greylist_transcript_extents, \
+                                                     chrom_sizes, \
+                                                     stranded = options.stranded )
+
+    exons        = get_constitutive_exons  ( annotation_rows + blacklist_rows, options.stranded )
+    introns      = get_constitutive_introns( annotation_rows + blacklist_rows, options.stranded )
+
+
+
+    # compute total intergenic and intronic
+    total_nt = 0
+    for seqname in intergenic:
+        for (start,end,strand) in intergenic[seqname]:
+            total_nt += end-start+1
+
+    stderr.write( 'total intergenic: %d\n' % total_nt )
+
+    total_nt = 0
+    for gene_id in introns:
+        for row in introns[gene_id]:
+            total_nt += row.end - row.start + 1
+
+    stderr.write( 'total intronic: %d\n' % total_nt )
+
+
+
+
+
+
+    # parameters
+    params = peakolator.parameters()
+    params.alpha = 0.01
+    params.d_min = 70
+    params.d_max = 100000
+    params.n_mc  = 100
+    params.padj_spacing = 100000
+    params.padj_n       = 10
+
+
+    # load read data, assess sequencing bias
+    data = peakolator.dataset( options.ref_fn, reads_fn, options.L, options.R, options.k )
+
+    # train background model
+    d_train = 1000
+    train = random_training_examples( greylist_intergenic, d_train, 10000,
+                                      stranded = options.stranded )
+    (params.r,params.p) = data.fit_null_distr( train )
+
+    # train pvalue model
+    params.build_padj()
+
+
+    # Debugging is sometimes made much easier by not launching more processes,
+    # so here we fake it.
+    if options.debug_mode:
+        prediction_queue = dummy_queue()
+
+        if options.scan_intergenic:
+            region_queue = dummy_queue()
+
+            for seqname in intergenic:
+                if seqname not in chrom_sizes: continue
+
+                for (start,end,strand) in intergenic[seqname]:
+                    if end - start + 1 < params.d_min: continue
+
+                    region_queue.put( (seqname, start, end, strand) )
+                    stderr.write( 'put one of length %d\n' % (end-start+1) )
+
+            peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
+
+        if options.scan_intronic:
+            gene_queue = dummy_queue()
+
+            for gene_id in set(exons.keys()) & set(introns.keys()):
+                gene_queue.put( (exons[gene_id], introns[gene_id]) )
+                stderr.write( 'put gene "%s"\n' % gene_id )
+
+            peakolate_intron( gene_queue, prediction_queue, data.copy(), params.copy() )
+
+    else:
+        # reporting process
+        prediction_queue = JoinableQueue()
+        t = Process( target = print_predictions,
+                     args   = (prediction_queue, stdout) )
+        t.start()
+
+
+        # Phase I: scan intergenic regions
+        if options.scan_intergenic:
+            region_queue     = JoinableQueue( maxsize = 2*options.num_procs )
+
+            for _ in range(options.num_procs):
+                t = Process( target=peakolate,
+                             args=(region_queue, prediction_queue, data.copy(), params.copy() ) )
+                t.start()
+
+            for seqname in intergenic:
+                if seqname not in chrom_sizes: continue
+
+                for (start,end,strand) in intergenic[seqname]:
+                    if end - start + 1 < params.d_min: continue
+
+                    region_queue.put( (seqname, start, end, strand) )
+                    stderr.write( 'put one of length %d\n' % (end-start+1) )
+
+            for _ in range(options.num_procs):
+                region_queue.put( None )
+            region_queue.join()
+
+
+        # Phase II: scan intronic regions
+        if options.scan_intronic:
+            gene_queue = JoinableQueue( maxsize = 2*options.num_procs )
+
+            for _ in range(options.num_procs):
+                t = Process( target=peakolate_intron,
+                             args=(gene_queue, prediction_queue, data.copy(), params.copy() ) )
+                t.start()
+
+            for gene_id in set(exons.keys()) & set(introns.keys()):
+                gene_queue.put( (exons[gene_id], introns[gene_id]) )
+                stderr.write( 'put gene "%s"\n' % gene_id )
+
+            for _ in range(options.num_procs):
+                gene_queue.put( None )
+            gene_queue.join()
+
+
+    prediction_queue.put( None ) # close queue
+    prediction_queue.close()
+
+
+
+if __name__ == '__main__':
+    main()
+    stderr.write( 'finished main' )
+
+
+
+
