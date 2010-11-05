@@ -11,6 +11,7 @@ OBJ=common.o \
 	peakolator_context.o \
 	peakolator_pval.o \
 	bias_correction.o \
+	superfasthash.o \
 	hash.o \
 	gmpfrxx/libgmpfrxx.a \
 	samtools/libbam.a
@@ -44,5 +45,5 @@ samtools/libbam.a :
 	cd samtools ; ${MAKE} libbam.a
 
 gmpfrxx/libgmpfrxx.a :
-	cd gmpfrxx ; ${MAKE} gmpfrxx.a
+	cd gmpfrxx ; ${MAKE} libgmpfrxx.a
 
