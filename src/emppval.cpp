@@ -1,7 +1,7 @@
 
 
-#include "peakolator_pval.hpp"
-#include "peakolator_model.hpp"
+#include "emppval.hpp"
+#include "model.hpp"
 #include "logger.h"
 
 #include <gsl/gsl_statistics_double.h>
@@ -9,28 +9,6 @@
 
 template <typename T> T sq( T x ) { return x*x; }
 
-
-
-/*
- *                          The Gumbel Distribution
- *                  (aka The Type-I Extreme Value Distribution)
- */
-
-
-template <typename T>
-T gumbel_pdf( const T& x, const T& loc, const T& scale )
-{
-    T z = exp( (x-loc)/scale );
-    return (z*exp(-z))/scale;
-}
-
-template <typename T>
-T gumbel_cdf( const T& x, const T& loc, const T& scale )
-{
-    if( scale <= 0.0 ) return 1.0;
-
-    return T(1.0) - exp( -exp( (x-loc)/scale ) );
-}
 
 
 /*
@@ -51,12 +29,6 @@ T gev_cdf( T q, const T& loc, const T& scale, const T& shape, bool lowertail = f
 }
 
 
-/* A function whose value is often needed when computing liklihoods and gradients */
-template <typename T>
-T gev_h( const T& x, const T& mu, const T& sigma, const T& xi )
-{
-    return 1.0 + xi * (x - mu) / sigma;
-}
 
 /* Log-liklihood */
 template <typename T>
@@ -80,7 +52,7 @@ T gev_ll( const T& x, const T& mu, const T& sigma, const T& xi )
 /* Objective function used to maximize likelihood */
 double gev_objf( unsigned int n, const double* params, double* grad, void* model )
 {
-    peakolator_pval* M = (peakolator_pval*)model;
+    emppval* M = (emppval*)model;
     const double mu    = params[0];
     const double sigma = params[1];
     const double xi    = params[2];
@@ -104,7 +76,7 @@ double gev_objf( unsigned int n, const double* params, double* grad, void* model
 
 
 
-peakolator_pval::peakolator_pval( peakolator_parameters* params  )
+emppval::emppval( parameters* params  )
     : mu(NULL), sigma(NULL), xi(NULL)
 {
     log_puts( LOG_MSG, "initializing p-value adjustment model ..." );
@@ -123,15 +95,15 @@ peakolator_pval::peakolator_pval( peakolator_parameters* params  )
     qx_mc = new double[params->n_mc];
 
     /* dummy context */
-    peakolator_context ctx;
-    peakolator_model* M;
+    context ctx;
+    model* M;
 
     int i;
     size_t j;
     for( i = 1; i < n; i++ ) {
 
         /* generate examples */
-        M = new peakolator_model( params, &ctx );
+        M = new model( params, &ctx );
 
         for( j = 0; j < params->n_mc; j++ ) {
             ctx.set_noise( params->dist, spacing*i );
@@ -185,7 +157,7 @@ peakolator_pval::peakolator_pval( peakolator_parameters* params  )
 
 
 
-peakolator_pval::peakolator_pval( const peakolator_pval& padj )
+emppval::emppval( const emppval& padj )
 {
     n       = padj.n;
     spacing = padj.spacing;
@@ -207,7 +179,7 @@ peakolator_pval::peakolator_pval( const peakolator_pval& padj )
 
 
 
-peakolator_pval::~peakolator_pval()
+emppval::~emppval()
 {
     delete[] mu;
     delete[] sigma;
@@ -215,7 +187,7 @@ peakolator_pval::~peakolator_pval()
 }
 
 
-mpfr_class peakolator_pval::adjust( const mpfr_class& pval, pos len ) const
+mpfr_class emppval::adjust( const mpfr_class& pval, pos len ) const
 {
     /* find lerped parameters */
     mpfr_class mu_i, sigma_i, xi_i;
@@ -263,7 +235,7 @@ mpfr_class peakolator_pval::adjust( const mpfr_class& pval, pos len ) const
 /* Maximimum likelihood fitting to the generalized extreme value distribution.
  * I make the simplifying assumption that xi != 0. So I fit with the constraint
  * xi > 0, then with xi < 0, and take the more likly parameters. */
-bool peakolator_pval::fit_gev_to_emperical( double* mu, double* sigma, double* xi )
+bool emppval::fit_gev_to_emperical( double* mu, double* sigma, double* xi )
 {
     nlopt_opt fsolve;
 

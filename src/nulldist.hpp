@@ -7,22 +7,22 @@
 #include <gsl/gsl_rng.h>
 
 
-class peakolator_parameters;
+class parameters;
 
 /* efficiently evaluate a probability distribution / density function using a
  * lookup table and interpolation. */
-class peakolator_dist
+class nulldist
 {
     public:
-        peakolator_dist();
-        peakolator_dist( const peakolator_dist& );
-        ~peakolator_dist();
+        nulldist();
+        nulldist( const nulldist& );
+        ~nulldist();
 
         void build( double r, double p, int m = 0, int n = 0 );
 
         bool ready() const;
 
-        void operator=( const peakolator_dist& );
+        void operator=( const nulldist& );
 
         mpfr_class QX( double r_i, rcount x_i );
         rcount rand( double r_i );
@@ -31,7 +31,7 @@ class peakolator_dist
     private:
         double r;
         double p;
-        peakolator_parameters* param;
+        parameters* param;
         int m; /* maximum rate */
         int n; /* maximum count */
         mpfr_class* A; /* rate by count */

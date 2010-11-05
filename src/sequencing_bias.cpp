@@ -1,5 +1,5 @@
 
-#include "bias_correction.hpp"
+#include "sequencing_bias.hpp"
 #include "logger.h"
 #include "common.hpp"
 

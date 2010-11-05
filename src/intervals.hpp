@@ -10,7 +10,7 @@
 
 #define PEAKOLATOR_PVAL_HEURISTIC
 
-class peakolator_model;
+class model;
 
 /* subinterval: an interval with relative coordinates and no strand or
  * chromosome */
@@ -124,7 +124,7 @@ class subinterval_bound_priority
 class subinterval_bound_pqueue : private std::vector<subinterval_bound*>
 {
     public:
-        subinterval_bound_pqueue( peakolator_model* );
+        subinterval_bound_pqueue( model* );
         ~subinterval_bound_pqueue();
 
         void conditional_push_copy( subinterval_bound&, const mpfr_class& p_max );
@@ -136,7 +136,7 @@ class subinterval_bound_pqueue : private std::vector<subinterval_bound*>
 
 
     private:
-        peakolator_model* model;
+        model* M;
 };
 
 

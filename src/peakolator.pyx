@@ -58,7 +58,7 @@ cdef extern from "annotations.hpp":
 
 
 
-cdef extern from "peakolator_interval.hpp":
+cdef extern from "intervals.hpp":
 
     ctypedef struct c_interval "interval":
         void set( char* seqname, pos start, pos end, int strand )
@@ -84,25 +84,25 @@ cdef extern from "peakolator_interval.hpp":
     void interval_stack_push ( c_interval_stack*, char* seqname, pos start, pos end, int strand )
 
 
-cdef extern from "peakolator_dataset.hpp":
+cdef extern from "dataset.hpp":
 
-    ctypedef struct c_peakolator_dataset "peakolator_dataset":
-        c_peakolator_dataset* copy()
+    ctypedef struct c_dataset "dataset":
+        c_dataset* copy()
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
 
-    c_peakolator_dataset* new_peakolator_dataset "new peakolator_dataset" ( \
+    c_dataset* new_dataset "new dataset" ( \
             char* fasta_fn, char* bam_fn, \
             pos bias_L, pos bias_R, unsigned int bias_k )
 
-    void del_peakolator_dataset "delete" ( c_peakolator_dataset* dataset )
+    void del_dataset "delete" ( c_dataset* dataset )
 
 
 
 
-cdef extern from "peakolator_context.hpp":
+cdef extern from "context.hpp":
 
-    ctypedef struct c_peakolator_context "peakolator_context":
-        void set( c_peakolator_dataset* dataset, char* chrom, \
+    ctypedef struct c_context "context":
+        void set( c_dataset* dataset, char* chrom, \
                   pos start, pos end, int strand )
 
         double rate()
@@ -110,14 +110,14 @@ cdef extern from "peakolator_context.hpp":
 
         pos length()
 
-    c_peakolator_context* new_peakolator_context "new peakolator_context" ()
-    void del_peakolator_context "delete" ( c_peakolator_context* context )
+    c_context* new_context "new context" ()
+    void del_context "delete" ( c_context* context )
 
 
-cdef extern from "peakolator_model.hpp":
+cdef extern from "model.hpp":
 
-    ctypedef struct c_peakolator_parameters "peakolator_parameters":
-        c_peakolator_parameters* copy()
+    ctypedef struct c_parameters "parameters":
+        c_parameters* copy()
         void rebuild_lookup( int m, int n )
         void build_padj()
         double alpha
@@ -129,22 +129,22 @@ cdef extern from "peakolator_model.hpp":
         int padj_n
         pass
 
-    c_peakolator_parameters* new_peakolator_parameters \
-                "new peakolator_parameters" ()
+    c_parameters* new_parameters \
+                "new parameters" ()
 
-    void del_peakolator_parameters "delete" ( c_peakolator_parameters* params )
+    void del_parameters "delete" ( c_parameters* params )
 
 
 
-    ctypedef struct c_peakolator_model "peakolator_model":
+    ctypedef struct c_model "model":
         c_interval_stack* run()
 
 
-    c_peakolator_model* new_peakolator_model "new peakolator_model" \
-            ( c_peakolator_parameters* params,
-              c_peakolator_context* context )
+    c_model* new_model "new model" \
+            ( c_parameters* params,
+              c_context* context )
 
-    void del_peakolator_model "delete" ( c_peakolator_model* model )
+    void del_model "delete" ( c_model* model )
 
 
 
@@ -274,7 +274,7 @@ cdef class interval:
 
 ## dataset
 cdef class dataset:
-    cdef c_peakolator_dataset* cthis
+    cdef c_dataset* cthis
 
     def __cinit__( self, *args ):
         cdef char* fasta_fn_cstr = NULL
@@ -285,7 +285,7 @@ cdef class dataset:
                 fasta_fn_cstr = fasta_fn
 
 
-            self.cthis = new_peakolator_dataset(
+            self.cthis = new_dataset(
                             fasta_fn_cstr, \
                             bam_fn, \
                             bias_L, bias_R, bias_k )
@@ -293,7 +293,7 @@ cdef class dataset:
             self.cthis = (<dataset>args[0]).cthis.copy()
 
     def __dealloc__( self ):
-        del_peakolator_dataset( self.cthis )
+        del_dataset( self.cthis )
 
     def copy( self ):
         return dataset( self )
@@ -320,14 +320,14 @@ cdef class dataset:
 
 ## context
 cdef class context:
-    cdef c_peakolator_context* cthis
+    cdef c_context* cthis
 
     def __cinit__( self ):
-        self.cthis = new_peakolator_context()
+        self.cthis = new_context()
 
     def __dealloc__( self ):
         if self.cthis != NULL:
-            del_peakolator_context( self.cthis )
+            del_context( self.cthis )
 
     def rate( self ):
         return self.cthis.rate()
@@ -344,7 +344,7 @@ cdef class context:
 
 ## parameters
 cdef class parameters:
-    cdef c_peakolator_parameters* cthis
+    cdef c_parameters* cthis
 
     def copy( self ):
         return parameters( self )
@@ -359,10 +359,10 @@ cdef class parameters:
         if other:
             self.cthis = other.cthis.copy()
         else:
-            self.cthis = new_peakolator_parameters()
+            self.cthis = new_parameters()
 
     def __dealloc__( self ):
-        del_peakolator_parameters( self.cthis )
+        del_parameters( self.cthis )
 
     property alpha:
         def __get__(self):       return self.cthis.alpha
@@ -401,14 +401,14 @@ cdef class parameters:
 
 ## model
 cdef class model:
-    cdef c_peakolator_model* cthis
+    cdef c_model* cthis
 
     def __cinit__( self, parameters prm, context ctx ):
         stderr.write( 'Creating new model of length %d' % ctx.length() )
-        self.cthis = new_peakolator_model( prm.cthis, ctx.cthis )
+        self.cthis = new_model( prm.cthis, ctx.cthis )
 
     def __dealloc__( self ):
-        del_peakolator_model( self.cthis )
+        del_model( self.cthis )
 
     def run( self ):
         cdef c_interval_stack* IS = self.cthis.run()

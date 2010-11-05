@@ -1,13 +1,13 @@
 
 
-#include "peakolator_context.hpp"
+#include "context.hpp"
 #include <gsl/gsl_math.h>
 
 
 
 int bam_fetch_callback( const bam1_t* b, void* a_ )
 {
-    peakolator_context* a = (peakolator_context*)a_;
+    context* a = (context*)a_;
     if( (a->strand == -1 || bam1_strand(b) == a->strand) && b->core.pos >= a->start ) {
         a->xs[bam1_strand(b)][b->core.pos - a->start]++;
     }
@@ -15,7 +15,7 @@ int bam_fetch_callback( const bam1_t* b, void* a_ )
 }
 
 
-peakolator_context::peakolator_context()
+context::context()
     : start(-1), end(-1), seqname(NULL), strand(-1)
 {
     xs[0] = NULL; xs[1] = NULL;
@@ -23,7 +23,7 @@ peakolator_context::peakolator_context()
 }
 
 
-void peakolator_context::clear()
+void context::clear()
 {
     start = -1;
     end   = -1;
@@ -38,12 +38,12 @@ void peakolator_context::clear()
     rs[0] = rs[1] = NULL;
 }
 
-void peakolator_context::set( peakolator_dataset* dataset, const interval& i )
+void context::set( dataset* dataset, const interval& i )
 {
     this->set( dataset, i.seqname, i.start, i.end, i.strand );
 }
 
-void peakolator_context::set( peakolator_dataset* dataset, const char* seqname,
+void context::set( dataset* dataset, const char* seqname,
                               pos start, pos end, int strand )
 {
     /* determine wether to examine both strand or just one */
@@ -95,7 +95,7 @@ void peakolator_context::set( peakolator_dataset* dataset, const char* seqname,
     this->strand = strand;
 }
 
-void peakolator_context::set_noise( peakolator_dist& dist, pos len )
+void context::set_noise( nulldist& dist, pos len )
 {
     if( strand != 0 || length() != len ){
         clear();
@@ -115,12 +115,12 @@ void peakolator_context::set_noise( peakolator_dist& dist, pos len )
 }
 
 
-rcount peakolator_context::count() const
+rcount context::count() const
 {
     return count( 0, length()-1 );
 }
 
-rcount peakolator_context::count( pos i ) const
+rcount context::count( pos i ) const
 {
     if( strand == -1 ) {
         return (xs[0] ? xs[0][i] : 0) + (xs[1] ? xs[1][i] : 0);
@@ -131,12 +131,12 @@ rcount peakolator_context::count( pos i ) const
 }
 
 
-rcount peakolator_context::count( pos i, pos j ) const
+rcount context::count( pos i, pos j ) const
 {
     return count( i, j, strand );
 }
 
-rcount peakolator_context::count( pos i, pos j, int strand ) const
+rcount context::count( pos i, pos j, int strand ) const
 {
     rcount total = 0;
     if( strand == -1 ) {
@@ -156,12 +156,12 @@ rcount peakolator_context::count( pos i, pos j, int strand ) const
     return total;
 }
 
-double peakolator_context::rate() const
+double context::rate() const
 {
     return rate( 0, length()-1 );
 }
 
-double peakolator_context::rate( pos i ) const
+double context::rate( pos i ) const
 {
     if( strand == -1 ) {
         return (rs[0] ? rs[0][i] : 1.0) + (rs[1] ? rs[1][i] : 1.0);
@@ -172,12 +172,12 @@ double peakolator_context::rate( pos i ) const
 }
 
 
-double peakolator_context::rate( pos i, pos j ) const
+double context::rate( pos i, pos j ) const
 {
     return rate( i, j, strand );
 }
 
-double peakolator_context::rate( pos i, pos j, int strand ) const
+double context::rate( pos i, pos j, int strand ) const
 {
     double total = 0.0;
     if( strand == -1 ) {
@@ -192,12 +192,12 @@ double peakolator_context::rate( pos i, pos j, int strand ) const
 }
 
 
-double peakolator_context::min_rate( const subinterval_bound& B, pos d_min ) const
+double context::min_rate( const subinterval_bound& B, pos d_min ) const
 {
     return min_rate( B, d_min, strand );
 }
 
-double peakolator_context::min_rate( const subinterval_bound& B, pos d_min, int strand ) const
+double context::min_rate( const subinterval_bound& B, pos d_min, int strand ) const
 {
 
     if( B.disjoint_bounds() ) {
@@ -228,13 +228,13 @@ double peakolator_context::min_rate( const subinterval_bound& B, pos d_min, int 
 }
 
 
-pos peakolator_context::length() const
+pos context::length() const
 {
     return end - start + 1;
 }
 
 
-void peakolator_context::print_adjusted_unadjusted_bias( FILE* out_f )
+void context::print_adjusted_unadjusted_bias( FILE* out_f )
 {
     int s, s0, s1;
     if( strand == -1 ) { s0 = 0; s1 = 1; }

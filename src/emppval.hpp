@@ -12,20 +12,20 @@
 
 #include <nlopt.h>
 
-class peakolator_parameters;
+class parameters;
 
-class peakolator_pval
+class emppval
 {
     public:
-        peakolator_pval( peakolator_parameters* params );
-        peakolator_pval( const peakolator_pval& );
-        ~peakolator_pval();
+        emppval( parameters* params );
+        emppval( const emppval& );
+        ~emppval();
         mpfr_class adjust( const mpfr_class&, pos len ) const;
 
     private:
         bool fit_gev_to_emperical( double* mu, double* sigma, double* xi );
 
-        peakolator_parameters* params;
+        parameters* params;
 
         int n;
         pos spacing;

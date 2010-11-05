@@ -29,8 +29,8 @@
  *                                Dependencies
  */
 
-#include "peakolator_model.hpp"
-#include "peakolator_pval.hpp"
+#include "model.hpp"
+#include "emppval.hpp"
 #include "common.hpp"
 #include "logger.h"
 
@@ -47,96 +47,31 @@
 
 #include "samtools/sam.h"
 
-#include <boost/math/distributions/poisson.hpp>
-
 
 using namespace std;
 
 
-
-/*
- *                            SECTION II:
- *                          Model Parameters
- */
-
-peakolator_parameters::peakolator_parameters()
-    : alpha(0.01)
-    , r(0.0)
-    , p(1.0)
-    , d_min(70)
-    , d_max(100000)
-    , n_mc(100)
-    , padj_spacing(10000)
-    , padj_n(20)
-    , padj(NULL)
-{
-    mpfr_class::set_dprec(_mpfr_prec_);
-}
-
-
-peakolator_parameters::peakolator_parameters( const peakolator_parameters& p )
-    : alpha(p.alpha)
-    , r(p.r)
-    , p(p.p)
-    , d_min(p.d_min)
-    , d_max(p.d_max)
-    , n_mc(p.n_mc)
-    , padj_spacing(p.padj_spacing)
-    , padj_n(p.padj_n)
-{
-    padj = p.padj ? new peakolator_pval(*p.padj) : NULL;
-    mpfr_class::set_dprec(_mpfr_prec_);
-}
-
-peakolator_parameters::~peakolator_parameters()
-{
-    delete padj;
-}
-
-peakolator_parameters* peakolator_parameters::copy() const
-{
-    return new peakolator_parameters( *this );
-}
-
-
-void peakolator_parameters::rebuild_lookup( int m, int n )
-{
-    dist.build( r, p, m, n );
-}
-
-void peakolator_parameters::build_padj()
-{
-    if( padj ) delete padj;
-    padj = new peakolator_pval( this );
-}
-
-
-/*
- *                            SECTION III:
- *                            Peakolator
- */
-
 /* construction */
-peakolator_model::peakolator_model( 
-                peakolator_parameters* params,
-                peakolator_context*    context  )
+model::model( 
+                parameters* params,
+                context*    ctx )
 {
-    this->context = context;
+    this->ctx = ctx;
     this->params  = params;
 
     if( !this->params->dist.ready() ) params->dist.build( params->r, params->p );
 
-    log_printf( LOG_MSG, "model created of length %d", context->length() );
+    log_printf( LOG_MSG, "model created of length %d", ctx->length() );
 }
 
 
-peakolator_model::~peakolator_model()
+model::~model()
 {
 }
 
 
 
-mpfr_class peakolator_model::QX( double r, rcount x )
+mpfr_class model::QX( double r, rcount x )
 {
     return params->dist.QX( r, x );
 }
@@ -145,7 +80,7 @@ mpfr_class peakolator_model::QX( double r, rcount x )
 
 
 /* run the model, returning all significant sub-intervals */
-interval_stack* peakolator_model::run()
+interval_stack* model::run()
 {
     /* in place of recursion, subintervals left to search */
     subinterval_stack unexplored;
@@ -159,7 +94,7 @@ interval_stack* peakolator_model::run()
     /* least likely subinterval in S */
     subinterval S_min;
 
-    unexplored.push_back( subinterval( 0, context->length()-1 ) );
+    unexplored.push_back( subinterval( 0, ctx->length()-1 ) );
 
     while( !unexplored.empty() ) {
         S = unexplored.back();
@@ -190,7 +125,7 @@ interval_stack* peakolator_model::run()
         }
     }
 
-    return new interval_stack( predictions, context->seqname, context->start, context->strand );
+    return new interval_stack( predictions, ctx->seqname, ctx->start, ctx->strand );
 }
 
 
@@ -199,21 +134,21 @@ interval_stack* peakolator_model::run()
  * Exploit the fact that the least likely interval should begin and end on
  * positions with non-zero read counts.
  */
-void peakolator_model::trim_candidate( subinterval& I )
+void model::trim_candidate( subinterval& I )
 {
-    while( I.length() > params->d_min && context->count(I.start) == 0 ) {
-        I.rate -= context->rate(I.start);
+    while( I.length() > params->d_min && ctx->count(I.start) == 0 ) {
+        I.rate -= ctx->rate(I.start);
         I.start++;
     }
 
-    while( I.length() > params->d_min && context->count(I.end)   == 0 ) {
-        I.rate -= context->rate(I.end);
+    while( I.length() > params->d_min && ctx->count(I.end)   == 0 ) {
+        I.rate -= ctx->rate(I.end);
         I.end--;
     }
 }
 
 
-subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha )
+subinterval model::least_likely_interval( pos i, pos j, double alpha )
 {
     log_printf( LOG_BLAB, "scanning %dnt...", j-i+1 );
     log_indent();
@@ -257,8 +192,8 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
     /* number of possible subintervals in B */
     size_t m;
 
-    B->set( i, j, context->rate(i,j), context->count(i,j) );
-    B->pval = QX(  context->min_rate( *B, params->d_min ), B->count );
+    B->set( i, j, ctx->rate(i,j), ctx->count(i,j) );
+    B->pval = QX(  ctx->min_rate( *B, params->d_min ), B->count );
 
     Q.push( B );
 
@@ -314,13 +249,13 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
             S.rate  = B->rate;
 
             if( S.start > B->I_min ) {
-                S.count -= context->count( B->I_min, S.start-1 );
-                S.rate  -= context->rate ( B->I_min, S.start-1 );
+                S.count -= ctx->count( B->I_min, S.start-1 );
+                S.rate  -= ctx->rate ( B->I_min, S.start-1 );
             }
 
             if( S.end < B->J_max ) {
-                S.count -= context->count( S.end+1, B->J_max );
-                S.rate  -= context->rate ( S.end+1, B->J_max );
+                S.count -= ctx->count( S.end+1, B->J_max );
+                S.rate  -= ctx->rate ( S.end+1, B->J_max );
             }
 
 
@@ -335,8 +270,8 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
                  * prediction lengths.
                  * */
                 if( S.start + params->d_min - 1 < B->J_max &&
-                    context->count(S.start) == 0 ) {
-                    S.rate -= context->rate(S.start);
+                    ctx->count(S.start) == 0 ) {
+                    S.rate -= ctx->rate(S.start);
                     S.start++;
                     continue;
                 }
@@ -345,8 +280,8 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
  
                 /* walk the end backwards */
                 while( S.end >= B->J_min && S.length() >= params->d_min ) {
-                    c = context->count( S.end );
-                    r = context->rate ( S.end );
+                    c = ctx->count( S.end );
+                    r = ctx->rate ( S.end );
 
                     /* efficiency trick, as above, same conditions apply */
                     if( S.length() > params->d_min && c == 0 ) {
@@ -373,14 +308,14 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
 
                 /* reset and move S.start forward */
                 S = S_prev;
-                S.count -= context->count(S.start);
-                S.rate  -= context->rate (S.start);
+                S.count -= ctx->count(S.start);
+                S.rate  -= ctx->rate (S.start);
                 S.start++;
 
                 if( S.end < B->J_max ) {
                     S.end++;
-                    S.count += context->count(S.end);
-                    S.rate  += context->rate (S.end);
+                    S.count += ctx->count(S.end);
+                    S.rate  += ctx->rate (S.end);
                 }
             }
         }
@@ -391,8 +326,8 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
         else if( B->equal_bounds() ) {
             mid1 = B->I_min + (B->I_max - B->I_min) / 2;
 
-            c1 = context->count( B->I_min, mid1 );
-            r1 = context->rate ( B->I_min, mid1 );
+            c1 = ctx->count( B->I_min, mid1 );
+            r1 = ctx->rate ( B->I_min, mid1 );
 
             /* Left: ####|---- */
             C.set( B->I_min, mid1, r1, c1 );
@@ -417,11 +352,11 @@ subinterval peakolator_model::least_likely_interval( pos i, pos j, double alpha 
             mid1 = B->I_min + (B->I_max - B->I_min) / 2;
             mid2 = B->J_min + (B->J_max - B->J_min) / 2;
 
-            c1 = context->count( B->I_min, mid1 );
-            r1 = context->rate ( B->I_min, mid1 );
+            c1 = ctx->count( B->I_min, mid1 );
+            r1 = ctx->rate ( B->I_min, mid1 );
 
-            c2 = context->count( mid2, B->J_max );
-            r2 = context->rate ( mid2, B->J_max );
+            c2 = ctx->count( mid2, B->J_max );
+            r2 = ctx->rate ( mid2, B->J_max );
 
 
             /* ####----|----####  */ 

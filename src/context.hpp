@@ -2,22 +2,22 @@
 #define PEAKOLATOR_CONTEXT
 
 #include "common.hpp"
-#include "peakolator_dataset.hpp"
-#include "peakolator_dist.hpp"
+#include "dataset.hpp"
+#include "nulldist.hpp"
 
 #include <cstdio>
 #include "samtools/bam.h"
 
 
-/* constructed by peakolator_dataset */
-class peakolator_context
+/* constructed by dataset */
+class context
 {
     public:
-        peakolator_context();
-        void set( peakolator_dataset* dataset, const char* chrom,
+        context();
+        void set( dataset* ds, const char* chrom,
                   pos start, pos end, int strand );
-        void set( peakolator_dataset* dataset, const interval& );
-        void set_noise( peakolator_dist&, pos len );
+        void set( dataset* ds, const interval& );
+        void set_noise( nulldist&, pos len );
 
         void clear();
 

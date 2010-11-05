@@ -4,13 +4,14 @@ include ../config.inc
 OBJ=common.o \
 	logger.o \
 	annotations.o \
-	peakolator_dist.o \
-	peakolator_interval.o \
-	peakolator_model.o \
-	peakolator_dataset.o \
-	peakolator_context.o \
-	peakolator_pval.o \
-	bias_correction.o \
+	nulldist.o \
+	intervals.o \
+	parameters.o \
+	model.o \
+	dataset.o \
+	context.o \
+	emppval.o \
+	sequencing_bias.o \
 	superfasthash.o \
 	hash.o \
 	gmpfrxx/libgmpfrxx.a \

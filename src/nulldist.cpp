@@ -1,6 +1,5 @@
 
-#include "peakolator_dist.hpp"
-#include "peakolator_model.hpp"
+#include "nulldist.hpp"
 #include "logger.h"
 
 #include <ctime>
@@ -8,7 +7,7 @@
 #include <boost/math/distributions/negative_binomial.hpp>
 
 
-peakolator_dist::peakolator_dist()
+nulldist::nulldist()
     : p(0.0), m(2000), n(100), A(NULL)
 {
     /* initialize rng */
@@ -16,13 +15,13 @@ peakolator_dist::peakolator_dist()
     gsl_rng_set(rng,time(NULL));
 }
 
-bool peakolator_dist::ready() const
+bool nulldist::ready() const
 {
     return A != NULL;
 }
 
 
-void peakolator_dist::build( double r, double p, int m, int n )
+void nulldist::build( double r, double p, int m, int n )
 {
     log_puts( LOG_MSG, "building lookup table ... " );
 
@@ -51,7 +50,7 @@ void peakolator_dist::build( double r, double p, int m, int n )
 }
 
 
-peakolator_dist::peakolator_dist( const peakolator_dist& y )
+nulldist::nulldist( const nulldist& y )
 {
     r = y.r;
     p = y.p;
@@ -70,7 +69,7 @@ peakolator_dist::peakolator_dist( const peakolator_dist& y )
 
 
 
-void peakolator_dist::operator=( const peakolator_dist& y )
+void nulldist::operator=( const nulldist& y )
 {
     if( A ) delete[] A;
 
@@ -90,7 +89,7 @@ void peakolator_dist::operator=( const peakolator_dist& y )
 }
 
 
-peakolator_dist::~peakolator_dist()
+nulldist::~nulldist()
 {
     if(A) delete[] A;
     gsl_rng_free(rng);
@@ -98,7 +97,7 @@ peakolator_dist::~peakolator_dist()
 
 
 
-mpfr_class peakolator_dist::QX( double r_i, rcount x_i )
+mpfr_class nulldist::QX( double r_i, rcount x_i )
 {
     if( x_i == 0 || r*r_i <= 0.0 ) return 1.0;
 
@@ -117,7 +116,7 @@ mpfr_class peakolator_dist::QX( double r_i, rcount x_i )
 
 
 
-rcount peakolator_dist::rand( double r_i )
+rcount nulldist::rand( double r_i )
 {
     return (rcount)gsl_ran_negative_binomial( rng, p, r*r_i );
 }

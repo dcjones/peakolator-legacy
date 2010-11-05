@@ -9,7 +9,7 @@ CPPFLAGS=$(shell gsl-config --cflags) \
          $(shell python-config --cflags | sed s/-Wstrict-prototypes// ) \
          $(BASE_FLAGS)
 
-LIBS=$(shell gsl-config --libs) $(shell python-config --libs) -lz -lgmp -lmpfr -lgmpfrxx -lnlopt
+LIBS=$(shell gsl-config --libs) $(shell python-config --libs) -lz -lgmp -lmpfr -lnlopt
 INC=$(shell python-config --includes)
 
 

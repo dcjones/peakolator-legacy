@@ -1,6 +1,6 @@
 
-#include "peakolator_dataset.hpp"
-#include "peakolator_context.hpp"
+#include "dataset.hpp"
+#include "context.hpp"
 #include "logger.h"
 //#include "negative_binomial.hpp"
 
@@ -19,7 +19,7 @@
 
 using namespace std;
 
-peakolator_dataset::peakolator_dataset(
+dataset::dataset(
         const char* ref_fn, const char* reads_fn,
         pos bias_L, pos bias_R, unsigned int bias_k )
 {
@@ -43,13 +43,13 @@ peakolator_dataset::peakolator_dataset(
     this->reads_fn = strdup(reads_fn);
 }
 
-peakolator_dataset::peakolator_dataset()
+dataset::dataset()
 {
 }
 
-peakolator_dataset* peakolator_dataset::copy() const
+dataset* dataset::copy() const
 {
-    peakolator_dataset* pd = new peakolator_dataset();
+    dataset* pd = new dataset();
 
     pd->bias = bias ? bias->copy() : NULL;
 
@@ -70,7 +70,7 @@ peakolator_dataset* peakolator_dataset::copy() const
     return pd;
 }
 
-peakolator_dataset::~peakolator_dataset()
+dataset::~dataset()
 {
     bam_index_destroy(reads_index);
     samclose(reads_f);
@@ -78,7 +78,7 @@ peakolator_dataset::~peakolator_dataset()
     free(reads_fn);
 }
 
-const sequencing_bias& peakolator_dataset::get_bias() const
+const sequencing_bias& dataset::get_bias() const
 {
     return *bias;
 }
@@ -114,7 +114,7 @@ double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
 
 
 
-void peakolator_dataset::fit_null_distr( interval_stack* is, double* r, double* p )
+void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
 {
     log_puts( LOG_MSG, "Fitting null distribution ... " );
     log_indent();
@@ -128,7 +128,7 @@ void peakolator_dataset::fit_null_distr( interval_stack* is, double* r, double* 
 
 
     log_puts( LOG_MSG, "getting counts and rates..." );
-    peakolator_context ctx;
+    context ctx;
     
     int u = 0;
     interval_stack::iterator i;

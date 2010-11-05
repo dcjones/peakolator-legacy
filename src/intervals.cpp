@@ -1,6 +1,6 @@
 
-#include "peakolator_interval.hpp"
-#include "peakolator_model.hpp"
+#include "intervals.hpp"
+#include "model.hpp"
 #include "logger.h"
 
 #include <algorithm>
@@ -239,8 +239,8 @@ bool subinterval_bound_priority::operator()( subinterval_bound*& a,
 #endif
 
 
-subinterval_bound_pqueue::subinterval_bound_pqueue( peakolator_model* model )
-    : model(model)
+subinterval_bound_pqueue::subinterval_bound_pqueue( model* M )
+    : M(M)
 {
 }
 
@@ -271,11 +271,11 @@ void subinterval_bound_pqueue::conditional_push_copy(
         const mpfr_class& p_max )
 {
     if( x.count > 0 &&
-        x.min_length() <= model->params->d_max &&
-        x.max_length() >= model->params->d_min )
+        x.min_length() <= M->params->d_max &&
+        x.max_length() >= M->params->d_min )
     {
-        x.pval = model->QX(
-                model->context->min_rate( x, model->params->d_min ),
+        x.pval = M->QX(
+                 M->ctx->min_rate( x, M->params->d_min ),
                 x.count );
         if( x.pval < p_max ) push( new subinterval_bound(x) );
     }
