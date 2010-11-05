@@ -8,10 +8,18 @@
 // Also requires the gmp and mpfr libraries.
 //
 
+
+/*
+ * Copied from BOOST for use in Peakolator.
+ * This file was causing some linker errors, that required some modification to
+ * fix.
+ */
+
+
 #ifndef BOOST_MATH_MPLFR_BINDINGS_HPP
 #define BOOST_MATH_MPLFR_BINDINGS_HPP
 
-#include <gmpfrxx.h>
+#include "gmpfrxx.h"
 #include <boost/math/tools/precision.hpp>
 #include <boost/math/tools/real_cast.hpp>
 #include <boost/math/policies/policy.hpp>

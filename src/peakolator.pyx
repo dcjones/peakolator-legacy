@@ -170,7 +170,7 @@ cdef class logger:
     def unindent( self ):
         log_unindent()
 
-    def write( self, level, msg ):
+    def write( self, msg, level = LOG_MSG ):
         log_puts( level, msg )
 
     def verbosity( self, level ):

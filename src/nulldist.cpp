@@ -23,8 +23,6 @@ bool nulldist::ready() const
 
 void nulldist::build( double r, double p, int m, int n )
 {
-    log_puts( LOG_MSG, "building lookup table ... " );
-
     if( A ) delete[] A;
 
     if( m != 0 ) this->m = m; else m = this->m;
@@ -46,7 +44,6 @@ void nulldist::build( double r, double p, int m, int n )
             A[i*n+j] = boost::math::cdf( boost::math::complement( dist, j-1 ) );
         }
     }
-    log_puts( LOG_MSG, "done." );
 }
 
 

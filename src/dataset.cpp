@@ -23,7 +23,7 @@ dataset::dataset(
         const char* ref_fn, const char* reads_fn,
         pos bias_L, pos bias_R, unsigned int bias_k )
 {
-    log_printf( LOG_MSG, "Loading reads from %s ... ", reads_fn );
+    log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
 
     bias = new sequencing_bias();
     if( ref_fn ) bias->build( ref_fn, reads_fn, bias_L, bias_R, bias_k ); //
@@ -39,6 +39,8 @@ dataset::dataset(
         log_printf( LOG_ERROR, "Can't open bam index '%s.bai'.", reads_fn );
         exit(1);
     }
+
+    log_puts( LOG_MSG, "done.\n" );
 
     this->reads_fn = strdup(reads_fn);
 }
@@ -116,7 +118,7 @@ double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
 
 void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
 {
-    log_puts( LOG_MSG, "Fitting null distribution ... " );
+    log_puts( LOG_MSG, "fitting null distribution ... \n" );
     log_indent();
 
 
@@ -127,7 +129,7 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     gsl_matrix* CR = gsl_matrix_alloc( is->size(), 2 );
 
 
-    log_puts( LOG_MSG, "getting counts and rates..." );
+    log_puts( LOG_MSG, "getting counts and rates ... " );
     context ctx;
     
     int u = 0;
@@ -150,6 +152,8 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     double c_var  = gsl_stats_variance_m( C.vector.data, C.vector.stride,
                                           C.vector.size, c_mean );
     double r_mean = gsl_stats_mean( R.vector.data, R.vector.stride, R.vector.size );
+
+    log_puts( LOG_MSG, "done.\n" );
 
 
 
@@ -175,13 +179,14 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     rp[1] = rp[0] / (rp[0]*c_mean);
 
 
-    log_puts( LOG_MSG, "fitting null distribution ..." );
+    log_puts( LOG_MSG, "fitting null distribution ... " );
     log_indent();
 
     double f_opt;
     nlopt_optimize( fmax, rp, &f_opt );
 
     log_unindent();
+    log_puts( LOG_MSG, "done.\n" );
 
 
     *r = rp[0];

@@ -2,10 +2,12 @@
 
 #include "logger.h"
 
+#define _GNU_SOURCE // for vasprintf
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 const char* INDENT = "  ";
 
@@ -14,6 +16,7 @@ struct logger
     FILE* f;
     int indent;
     int verbosity;
+    bool linestart;
 };
 
 
@@ -24,9 +27,10 @@ void log_init(void)
 {
     if( !g_log ) {
         g_log = malloc(sizeof(struct logger));
-        g_log->indent = 1;
+        g_log->indent = 0;
         g_log->verbosity = LOG_MSG;
         g_log->f = stderr;
+        g_log->linestart = true;
     }
 }
 
@@ -68,7 +72,7 @@ void log_printf( int vl, const char* fmt, ... )
 
     char* fmt_ = malloc(sizeof(char) * (strlen(fmt)+g_log->indent*strlen(INDENT)+1));
     size_t m = strlen(INDENT);
-    int i = g_log->indent;
+    int i = g_log->linestart ? g_log->indent : 0;
     int j = 0;
     while( i-- ) {
         memcpy( fmt_+j, INDENT, m*sizeof(char) );
@@ -80,8 +84,14 @@ void log_printf( int vl, const char* fmt, ... )
     j += m;
     fmt_[j] = '\0';
 
-    vfprintf( g_log->f, fmt_, ap );
+    char* outstr;
+    int outstrlen = vasprintf( &outstr, fmt_, ap );
+    
+    fputs( outstr, g_log->f );
 
+    g_log->linestart = outstrlen > 0 && outstr[outstrlen-1] == '\n';
+
+    free(outstr);
     va_end(ap);
 }
 

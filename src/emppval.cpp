@@ -66,7 +66,7 @@ double gev_objf( unsigned int n, const double* params, double* grad, void* model
         fx += gev_ll( x, mu, sigma, xi );
     }
 
-    log_printf( LOG_BLAB, "\tgev_objf: fx = %0.4e\n\tmu = %0.4e, sigma = %0.4e, xi = %0.4e",
+    log_printf( LOG_BLAB, "\tgev_objf: fx = %0.4e\n\tmu = %0.4e, sigma = %0.4e, xi = %0.4e\n",
                 fx, mu, sigma, xi );
 
     return fx;
@@ -79,7 +79,7 @@ double gev_objf( unsigned int n, const double* params, double* grad, void* model
 emppval::emppval( parameters* params  )
     : mu(NULL), sigma(NULL), xi(NULL)
 {
-    log_puts( LOG_MSG, "initializing p-value adjustment model ..." );
+    log_puts( LOG_MSG, "initializing p-value adjustment model ...\n" );
     log_indent();
 
     this->params  = params;
@@ -101,6 +101,7 @@ emppval::emppval( parameters* params  )
     int i;
     size_t j;
     for( i = 1; i < n; i++ ) {
+        log_printf( LOG_MSG, "fitting length = %d ... ", i*spacing );
 
         /* generate examples */
         M = new model( params, &ctx );
@@ -114,19 +115,21 @@ emppval::emppval( parameters* params  )
 
         /* fit */
         if( !fit_gev_to_emperical( &mu_i, &sigma_i, &xi_i ) ) {
-            log_puts( LOG_ERROR, "GEVD MLE fitting failed! Please report/investigate." );
+            log_puts( LOG_ERROR, "GEVD MLE fitting failed! Please report/investigate.\n" );
             exit(1);
         }
 
 
         log_printf( LOG_BLAB,
-                    "model fit for n = %ld.  loc = %0.8e, scale = %0.8e, shape = %0.8e",
+                    "model fit for n = %ld.  loc = %0.8e, scale = %0.8e, shape = %0.8e\n",
                     i*spacing, mu_i, sigma_i, xi_i );
 
 
         mu[i]    = mu_i;
         sigma[i] = sigma_i;
         xi[i]    = xi_i;
+
+        log_puts( LOG_MSG, "done.\n" );
     }
 
 
@@ -152,7 +155,7 @@ emppval::emppval( parameters* params  )
     delete[] qx_mc;
 
     log_unindent();
-    log_puts( LOG_MSG, "done." );
+    log_puts( LOG_MSG, "done.\n" );
 }
 
 

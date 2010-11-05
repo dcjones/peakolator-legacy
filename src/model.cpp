@@ -61,7 +61,6 @@ model::model(
 
     if( !this->params->dist.ready() ) params->dist.build( params->r, params->p );
 
-    log_printf( LOG_MSG, "model created of length %d", ctx->length() );
 }
 
 
@@ -82,6 +81,8 @@ mpfr_class model::QX( double r, rcount x )
 /* run the model, returning all significant sub-intervals */
 interval_stack* model::run()
 {
+    log_printf( LOG_MSG, "running scan of length %d\n", ctx->length() );
+
     /* in place of recursion, subintervals left to search */
     subinterval_stack unexplored;
 
@@ -124,6 +125,8 @@ interval_stack* model::run()
             }
         }
     }
+
+    log_printf( LOG_MSG, "finished scan of length %d\n", ctx->length() );
 
     return new interval_stack( predictions, ctx->seqname, ctx->start, ctx->strand );
 }
@@ -388,7 +391,7 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
         /* Case 3: !! ERROR !! */
         else {
             log_puts( LOG_ERROR, "Error: LLI bounds are niether equal nor disjoint. "
-                      "Please investigate/report." );
+                      "Please investigate/report.\n" );
             exit(1);
         }
 
@@ -397,7 +400,7 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
 
     log_unindent();
     t1 = clock();
-    log_printf( LOG_BLAB, "finished in %0.2f seconds",
+    log_printf( LOG_BLAB, "finished in %0.2f seconds\n",
                           (double)(t1-t0)/(double)CLOCKS_PER_SEC );
     return S_min;
 }

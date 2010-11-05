@@ -9,11 +9,11 @@
 const mpfr_prec_t _mpfr_prec_ = 53;
 
 /* faidx stuff */
-#include <samtools/khash.h>
+#include "samtools/khash.h"
 
 
 #ifndef _NO_RAZF
-#include <samtools/razf.h>
+#include "samtools/razf.h"
 #else
 #ifdef _WIN32
 #define ftello(fp) ftell(fp)
@@ -30,7 +30,7 @@ extern int fseeko(FILE *stream, off_t offset, int whence);
 #define razf_tell(fp) ftello(fp)
 #endif
 #ifdef _USE_KNETFILE
-#include <samtools/knetfile.h>
+#include "samtools/knetfile.h"
 #endif
 
 

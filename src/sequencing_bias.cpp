@@ -5,11 +5,11 @@
 
 #include <cmath>
 #include <cctype>
+#include "samtools/faidx.h"
 
 #include <algorithm>
 using namespace std;
 
-#include <samtools/faidx.h>
 
 
 double sq( double x ) { return x*x; }
@@ -122,7 +122,7 @@ void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
                              pos L, pos R, unsigned int k )
 {
-    log_puts( LOG_MSG, "Determining sequencing bias..." );
+    log_puts( LOG_MSG, "Determining sequencing bias...\n" );
     log_indent();
 
     clear();
@@ -150,13 +150,13 @@ void sequencing_bias::build( const char* ref_fn,
     /* currently, I am packing kmers into 16bits, using two bit encoding, thus
      * k <= 8 must be true. */
     if( k > 4*sizeof(kmer) ) {
-        log_printf( LOG_ERROR, "Assertion failed: k <= %d", 4*sizeof(kmer) );
+        log_printf( LOG_ERROR, "Assertion failed: k <= %d\n", 4*sizeof(kmer) );
         exit(1);
     }
 
     samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam file '%s'.", reads_fn );
+        log_printf( LOG_ERROR, "Can't open bam file '%s'.\n", reads_fn );
         exit(1);
     }
 
@@ -173,13 +173,14 @@ void sequencing_bias::build( const char* ref_fn,
 
     /* sort by position so we can read the reference sequence one chromosome at
      * a time */
-    log_puts( LOG_MSG, "sorting read positions..." );
+    log_puts( LOG_MSG, "sorting read positions ... " );
     table_sort_by_position( &T, &S );
+    log_puts( LOG_MSG, "done.\n" )
 
     n = T.m;
 
     /* sample foreground and background kmer frequencies */
-    log_puts( LOG_MSG, "sampling sequence bias..." );
+    log_puts( LOG_MSG, "sampling sequence bias ...\n" );
     log_indent();
 
 
@@ -223,12 +224,12 @@ void sequencing_bias::build( const char* ref_fn,
             seqlen  = reads_f->header->target_len[S[i]->pos.tid];
             if( seq ) free(seq); 
 
-            log_printf( LOG_MSG, "reading sequence '%s'...", seqname );
+            log_printf( LOG_MSG, "reading sequence '%s'...\n", seqname );
 
             seq = faidx_fetch_seq( ref_f, seqname, 0, seqlen-1, &seqlen );
 
             if( seq == NULL ) {
-                log_puts( LOG_WARN, "warning: reference sequence not found, skipping." );
+                log_puts( LOG_WARN, "warning: reference sequence not found, skipping.\n" );
             }
             else {
                 for( char* c = seq; *c; c++ ) *c = tolower(*c);
@@ -364,7 +365,7 @@ void sequencing_bias::print_kmer_frequencies( pos L_, pos R_, unsigned int k_,
             seqlen  = reads_f->header->target_len[S[i]->pos.tid];
             if( seq ) free(seq); 
 
-            log_printf( LOG_MSG, "reading sequence '%s'...", seqname );
+            log_printf( LOG_MSG, "reading sequence '%s' ...\n", seqname );
 
             seq = faidx_fetch_seq( ref_f, seqname, 0, seqlen-1, &seqlen );
             for( char* c = seq; *c; c++ ) *c = tolower(*c);

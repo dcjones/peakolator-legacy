@@ -40,6 +40,10 @@ from itertools       import izip
 
 
 
+msg = peakolator.logger()
+
+
+
 # For debugging. Pretend to be a joinable queue
 class dummy_queue:
 
@@ -224,7 +228,7 @@ def parse_gtf_bed( fn ):
 def parse_gtf( gtf_fn, row_filter=lambda row: row.feature == 'exon' ):
     ''' extract annotations from a gtf file '''
 
-    stderr.write( 'parsing %s ... ' % gtf_fn )
+    msg.write( 'parsing %s ... ' % gtf_fn )
 
     rows = []
     i = 0
@@ -234,14 +238,14 @@ def parse_gtf( gtf_fn, row_filter=lambda row: row.feature == 'exon' ):
         try:
             row = gtf_row_from_gtf_line( line )
         except TypeError:
-            stderr.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
-                          (len(line.split('\t')), i, gtf_fn) )
+            msg.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
+                       (len(line.split('\t')), i, gtf_fn), peakolator.LOG_WARN )
             continue
 
         if row_filter(row):
             rows.append( row )
 
-    stderr.write( 'done (%d annotations).\n' % len(rows) )
+    msg.write( 'done (%d annotations).\n' % len(rows) )
 
     return rows
 
@@ -251,7 +255,7 @@ def parse_gtf( gtf_fn, row_filter=lambda row: row.feature == 'exon' ):
 def parse_bed( bed_fn ):
     ''' extract annotations from a bed file '''
 
-    stderr.write( 'parsing %s ... ' % bed_fn )
+    msg.write( 'parsing %s ... ' % bed_fn )
 
     rows = []
     i = 0
@@ -261,13 +265,13 @@ def parse_bed( bed_fn ):
         try:
             row = gtf_row_from_bed_line( line )
         except TypeError:
-            stderr.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
-                          (len(line.split('\t')), i, gtf_fn) )
+            msg.write( 'Only %d fields found on line %d of %s. Skipping.\n' % \
+                       (len(line.split('\t')), i, gtf_fn), peakolator.LOG_WARN )
             continue
 
         rows.append(row)
 
-    stderr.write( 'done (%d annotations).\n' % len(rows) )
+    msg.write( 'done (%d annotations).\n' % len(rows) )
 
     return rows
 
@@ -329,7 +333,7 @@ def get_constitutive_exons( rows, stranded = True ):
     ''' A dictionary mappin gene_id's to gtf_rows representing exonic intervals
     that are present in every isoform of the gene.'''
 
-    stderr.write( 'getting genes and transcripts ... ' )
+    msg.write( 'getting genes and transcripts ... ' )
 
     genes       = defaultdict(set)
     transcripts = defaultdict(list)
@@ -345,9 +349,9 @@ def get_constitutive_exons( rows, stranded = True ):
         genes[gene_id].add( transcript_id )
         transcripts[transcript_id].append( row )
 
-    stderr.write( 'done. (%d genes, %d transcripts)\n' % (len(genes), len(transcripts) ) )
+    msg.write( 'done. (%d genes, %d transcripts)\n' % (len(genes), len(transcripts) ) )
 
-    stderr.write( 'getting constitutive exons ... ' )
+    msg.write( 'getting constitutive exons ... ' )
 
     exons = {}
 
@@ -355,7 +359,7 @@ def get_constitutive_exons( rows, stranded = True ):
         intersect = partial( gtf_intersect_rows, stranded = stranded )
         exons[gene_id] = reduce( intersect, [ transcripts[id] for id in genes[gene_id] ] )
 
-    stderr.write( 'done. (%d constitutive exons)\n' % \
+    msg.write( 'done. (%d constitutive exons)\n' % \
                     sum( map( len, exons.itervalues() ) ) )
 
     return exons
@@ -366,7 +370,7 @@ def get_constitutive_introns( rows, stranded = True ):
     intronic intervals present in at least one isoform of a gene and not
     overlapping any exon from any gene. '''
 
-    stderr.write( 'getting constitutive introns ... ' )
+    msg.write( 'getting constitutive introns ... ' )
 
     if stranded:
         key = lambda row: (row.strand, row.seqname, row.start, row.end)
@@ -419,7 +423,7 @@ def get_constitutive_introns( rows, stranded = True ):
 
             introns[curr_gene[-1]].append(row)
 
-    stderr.write( 'done. (%d constitutive introns)\n' % \
+    msg.write( 'done. (%d constitutive introns)\n' % \
             sum( map( len, introns.itervalues() ) ) )
 
     return introns
@@ -445,7 +449,7 @@ def get_transcript_extents( rows ):
     ''' return a dictionary of sorted intervals for each chromosome, containing
     the extents of each transcript '''
 
-    stderr.write( 'getting transcript extents ... ' )
+    msg.write( 'getting transcript extents ... ' )
 
     # organize rows by transcript
     dummy_trans  = 1
@@ -477,7 +481,7 @@ def get_transcript_extents( rows ):
     for seqname in intervals:
         intervals[seqname].sort( key = lambda x: x[0] )
 
-    stderr.write( 'done (%d transcripts)\n' % sum(map(len,intervals.itervalues())) )
+    msg.write( 'done (%d transcripts)\n' % sum(map(len,intervals.itervalues())) )
 
     return intervals
 
@@ -486,7 +490,7 @@ def get_transcript_extents( rows ):
 def get_interval_gaps( intervals, chrom_sizes, stranded ):
     ''' get all the intervals, not covered by the provided intervals '''
 
-    stderr.write( 'getting intergenic regions ... ' )
+    msg.write( 'getting intergenic regions ... ' )
 
     gaps = defaultdict(list)
 
@@ -505,7 +509,7 @@ def get_interval_gaps( intervals, chrom_sizes, stranded ):
             if seqname in chrom_sizes and prev_end+1 < chrom_sizes[seqname]:
                 gaps[seqname].append( (prev_end+1,chrom_sizes[seqname]-1,s) )
 
-    stderr.write( 'done (%d regions)\n' % sum(map(len,gaps.itervalues())) )
+    msg.write( 'done (%d regions)\n' % sum(map(len,gaps.itervalues())) )
 
     return gaps
 
@@ -528,7 +532,7 @@ def peakolate( region_queue, prediction_queue, data, params ):
 
         (seqname,start,end,strand) = R
 
-        stderr.write( 'got one of length %d.\n' % (end-start+1) )
+        msg.write( 'got one of length %d.\n' % (end-start+1) )
 
         ctx.set( data, seqname, start, end, strand )
 
@@ -564,7 +568,7 @@ def peakolate_intron( gene_queue, prediction_queue, data, params ):
 
         gene_id = introns[0].attributes['gene_id']
 
-        stderr.write( 'got gene "%s" with %d introns.\n' % (gene_id, len(introns) ) )
+        msg.write( 'got gene "%s" with %d introns.\n' % (gene_id, len(introns) ) )
 
         exonic_rate  = 0
         exonic_count = 0
@@ -622,7 +626,7 @@ def print_predictions( prediction_queue, f_out ):
         prediction_queue.task_done()
 
     prediction_queue.task_done() # complete the None task
-    stderr.write( '(print_preditions) process terminated\n' )
+    msg.write( '(print_preditions) process terminated\n' )
 
 
 def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
@@ -698,7 +702,7 @@ def main():
 
     reads_fn = args[0]
     if not isfile(reads_fn):
-        stderr.write( 'Can\'t open file %s.\n' % reads_fn )
+        msg.write( 'Can\'t open file %s.\n' % reads_fn, peakolator.LOG_ERROR )
         exit(1)
 
 
@@ -714,10 +718,17 @@ def main():
                                               chrom_sizes, \
                                               stranded = options.stranded )
 
-    greylist_transcript_extents = get_transcript_extents( annotation_rows + blacklist_rows + greylist_rows )
-    greylist_intergenic         = get_interval_gaps( greylist_transcript_extents, \
+    if greylist_rows:
+        greylist_transcript_extents = get_transcript_extents( annotation_rows + \
+                                                              blacklist_rows + \
+                                                              greylist_rows )
+        greylist_intergenic         = get_interval_gaps( greylist_transcript_extents, \
                                                      chrom_sizes, \
                                                      stranded = options.stranded )
+    else:
+        greylist_transcript_extents = transcript_extents
+        greylist_intergenic         = intergenic
+
 
     exons        = get_constitutive_exons  ( annotation_rows + blacklist_rows, options.stranded )
     introns      = get_constitutive_introns( annotation_rows + blacklist_rows, options.stranded )
@@ -730,14 +741,14 @@ def main():
         for (start,end,strand) in intergenic[seqname]:
             total_nt += end-start+1
 
-    stderr.write( 'total intergenic: %d\n' % total_nt )
+    msg.write( 'total intergenic: %d\n' % total_nt )
 
     total_nt = 0
     for gene_id in introns:
         for row in introns[gene_id]:
             total_nt += row.end - row.start + 1
 
-    stderr.write( 'total intronic: %d\n' % total_nt )
+    msg.write( 'total intronic: %d\n' % total_nt )
 
 
 
@@ -782,7 +793,8 @@ def main():
                     if end - start + 1 < params.d_min: continue
 
                     region_queue.put( (seqname, start, end, strand) )
-                    stderr.write( 'put one of length %d\n' % (end-start+1) )
+                    msg.write( 'put one of length %d\n' % (end-start+1),
+                                peakolator.LOG_BLAB )
 
             peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
 
@@ -791,7 +803,7 @@ def main():
 
             for gene_id in set(exons.keys()) & set(introns.keys()):
                 gene_queue.put( (exons[gene_id], introns[gene_id]) )
-                stderr.write( 'put gene "%s"\n' % gene_id )
+                msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
 
             peakolate_intron( gene_queue, prediction_queue, data.copy(), params.copy() )
 
@@ -819,7 +831,8 @@ def main():
                     if end - start + 1 < params.d_min: continue
 
                     region_queue.put( (seqname, start, end, strand) )
-                    stderr.write( 'put one of length %d\n' % (end-start+1) )
+                    msg.write( 'put one of length %d\n' % (end-start+1),
+                            peakolator.LOG_BLAB )
 
             for _ in range(options.num_procs):
                 region_queue.put( None )
@@ -837,7 +850,7 @@ def main():
 
             for gene_id in set(exons.keys()) & set(introns.keys()):
                 gene_queue.put( (exons[gene_id], introns[gene_id]) )
-                stderr.write( 'put gene "%s"\n' % gene_id )
+                msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
 
             for _ in range(options.num_procs):
                 gene_queue.put( None )
@@ -851,7 +864,7 @@ def main():
 
 if __name__ == '__main__':
     main()
-    stderr.write( 'finished main' )
+    msg.write( 'finished main', peakolator.LOG_BLAB )
 
 
 
