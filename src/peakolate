@@ -808,7 +808,7 @@ def main():
                 gene_queue.put( (exons[gene_id], introns[gene_id]) )
                 msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
 
-            region_queue.put( None )
+            gene_queue.put( None )
             peakolate_intron( gene_queue, prediction_queue, data.copy(), params.copy() )
 
     else:
