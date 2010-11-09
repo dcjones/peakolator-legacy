@@ -25,8 +25,11 @@ dataset::dataset(
 {
     log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
 
-    bias = new sequencing_bias();
-    if( ref_fn ) bias->build( ref_fn, reads_fn, bias_L, bias_R, bias_k ); //
+    if( ref_fn ) {
+        bias = new sequencing_bias();
+        bias->build( ref_fn, reads_fn, bias_L, bias_R, bias_k );
+    }
+    else bias = NULL;
 
     reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
