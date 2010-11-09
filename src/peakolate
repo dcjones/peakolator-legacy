@@ -798,6 +798,7 @@ def main():
                     msg.write( 'put one of length %d\n' % (end-start+1),
                                 peakolator.LOG_BLAB )
 
+            region_queue.put( None )
             peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
 
         if options.scan_intronic:
@@ -807,6 +808,7 @@ def main():
                 gene_queue.put( (exons[gene_id], introns[gene_id]) )
                 msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
 
+            region_queue.put( None )
             peakolate_intron( gene_queue, prediction_queue, data.copy(), params.copy() )
 
     else:
