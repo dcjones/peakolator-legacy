@@ -15,10 +15,12 @@
 #
 #                                      ~~~
 #
-#                                  August, 2010
+#                             Copyright (C) 2010 by
+#                    Daniel Jones <dcjones@cs.washington.edu>
+# 
 #
-#                                 Daniel Jones
-#                           <dcjones@cs.washington.edu>
+#                       (See included README for licensing.)
+#
 
 
 import time

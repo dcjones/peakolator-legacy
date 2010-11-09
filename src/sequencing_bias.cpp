@@ -175,7 +175,7 @@ void sequencing_bias::build( const char* ref_fn,
      * a time */
     log_puts( LOG_MSG, "sorting read positions ... " );
     table_sort_by_position( &T, &S );
-    log_puts( LOG_MSG, "done.\n" )
+    log_puts( LOG_MSG, "done.\n" );
 
     n = T.m;
 

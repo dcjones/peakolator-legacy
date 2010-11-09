@@ -1,33 +1,3 @@
-/*
- *                                   _         _       _             
- *                  _ __   ___  __ _| | _____ | | __ _| |_ ___  _ __ 
- *                 | '_ \ / _ \/ _` | |/ / _ \| |/ _` | __/ _ \| '__|
- *                 | |_) |  __/ (_| |   < (_) | | (_| | || (_) | |   
- *                 | .__/ \___|\__,_|_|\_\___/|_|\__,_|\__\___/|_|   
- *                 |_|     
- *
- *                                      ~~~
- *
- *                          Finding enriched regions in 
- *                          high-throughput sequencing data.
- *
- *                                      ~~~
- *
- *                                  April, 2010
- *
- *                                 Daniel Jones
- *                           <dcjones@cs.washington.edu>
- */
-
-
-
-
-
-
-/*
- *                                 SECTION 0:
- *                                Dependencies
- */
 
 #include "model.hpp"
 #include "emppval.hpp"
