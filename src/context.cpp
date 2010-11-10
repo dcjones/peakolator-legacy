@@ -187,7 +187,11 @@ double context::rate( pos i, pos j, int strand ) const
             i++;
         }
     }
-    else while( i <= j ) total += rs[strand] ? rs[strand][i++] : 1.0;
+    else while( i <= j ) {
+        total += rs[strand] ? rs[strand][i++] : 1.0;
+        i++;
+    }
+
     return total;
 }
 
