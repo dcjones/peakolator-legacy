@@ -90,7 +90,7 @@ void context::set( dataset* dataset, const char* seqname,
             rs[s] = dataset->bias->get_bias( seqname, start, end, s );
         }
     }
-    else rs[s] = NULL;
+    else rs[0] = rs[1] = NULL;
 
     this->strand = strand;
 }

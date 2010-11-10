@@ -824,7 +824,7 @@ def main():
 
         # Phase I: scan intergenic regions
         if options.scan_intergenic:
-            region_queue     = JoinableQueue( maxsize = 2*options.num_procs )
+            region_queue     = JoinableQueue()
 
             for _ in range(options.num_procs):
                 t = Process( target=peakolate,
@@ -848,7 +848,7 @@ def main():
 
         # Phase II: scan intronic regions
         if options.scan_intronic:
-            gene_queue = JoinableQueue( maxsize = 2*options.num_procs )
+            gene_queue = JoinableQueue()
 
             for _ in range(options.num_procs):
                 t = Process( target=peakolate_intron,

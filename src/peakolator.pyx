@@ -404,7 +404,6 @@ cdef class model:
     cdef c_model* cthis
 
     def __cinit__( self, parameters prm, context ctx ):
-        stderr.write( 'Creating new model of length %d' % ctx.length() )
         self.cthis = new_model( prm.cthis, ctx.cthis )
 
     def __dealloc__( self ):
