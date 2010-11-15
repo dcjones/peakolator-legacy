@@ -500,8 +500,14 @@ def get_interval_gaps( intervals, chrom_sizes, stranded ):
     gaps = defaultdict(list)
 
 
-    for seqname in intervals:
-        if seqname not in chrom_sizes: continue
+    for seqname in chrom_sizes:
+        if seqname not in intervals:
+            if stranded:
+                gaps[seqname].append( (0,chrom_sizes[seqname]-1,0) )
+                gaps[seqname].append( (0,chrom_sizes[seqname]-1,1) )
+            else:
+                gaps[seqname].append( (0,chrom_sizes[seqname]-1,-1) )
+            continue
 
         for s in ((0,1) if stranded else (-1,)):
             prev_end = -1

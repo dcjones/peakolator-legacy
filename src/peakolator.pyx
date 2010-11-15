@@ -1,6 +1,7 @@
 
 from sys import stderr
 import re
+import numpy as np
 
 
 cdef extern from "stdlib.h":
@@ -56,6 +57,10 @@ cdef extern from "annotations.hpp":
     rows* get_constitutive_exons( rows*, bool )
 
 
+cdef extern from "sequencing_bias.hpp":
+    ctypedef struct c_sequencing_bias "sequencing_bias":
+        double* get_bias( char* seqname, pos start, pos end, int strand )
+        pass
 
 
 cdef extern from "intervals.hpp":
@@ -89,10 +94,14 @@ cdef extern from "dataset.hpp":
     ctypedef struct c_dataset "dataset":
         c_dataset* copy()
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
+        c_sequencing_bias* bias
+
+
 
     c_dataset* new_dataset "new dataset" ( \
             char* fasta_fn, char* bam_fn, \
-            pos bias_L, pos bias_R, unsigned int bias_k )
+            pos bias_L, pos bias_R, unsigned int bias_k,
+            char* training_seqname )
 
     void del_dataset "delete" ( c_dataset* dataset )
 
@@ -277,20 +286,38 @@ cdef class dataset:
     cdef c_dataset* cthis
 
     def __cinit__( self, *args ):
-        cdef char* fasta_fn_cstr = NULL
+        cdef char* fasta_fn_cstr    = NULL
+        cdef char* training_seqname = NULL
 
-        if len(args) == 5:
-            (fasta_fn,bam_fn,bias_L,bias_R,bias_k) = args
+        if len(args) >= 5:
+            (fasta_fn,bam_fn,bias_L,bias_R,bias_k) = args[:5]
+
             if fasta_fn is not None:
                 fasta_fn_cstr = fasta_fn
 
+            if len(args) > 5:
+                training_seqname = args[5]
 
             self.cthis = new_dataset(
                             fasta_fn_cstr, \
                             bam_fn, \
-                            bias_L, bias_R, bias_k )
+                            bias_L, bias_R, bias_k,
+                            training_seqname )
         else:
             self.cthis = (<dataset>args[0]).cthis.copy()
+
+
+    def get_bias( self, chrom, start, end, strand ):
+        cdef double* c_ws
+        c_ws = self.cthis.bias.get_bias( chrom, start, end, strand )
+
+        cdef int i
+        ws = np.empty( end - start + 1, dtype=np.double )
+        for i in range(end-start+1):
+            ws[i] = c_ws[i]
+
+        return ws
+
 
     def __dealloc__( self ):
         del_dataset( self.cthis )

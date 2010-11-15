@@ -17,18 +17,14 @@ typedef boost::uint16_t kmer;
 class sequencing_bias
 {
     public:
-        sequencing_bias();
         sequencing_bias( const char* ref_fn,
                          const char* reads_fn,
-                         pos L, pos R, unsigned int k );
+                         pos L, pos R, unsigned int k,
+                         const char* training_seqname = NULL );
 
         sequencing_bias* copy() const;
 
         void clear();
-
-        void build( const char* ref_fn,
-                    const char* reads_fn,
-                    pos L, pos R, unsigned int k );
 
         void print_kmer_frequencies( pos L, pos R, unsigned int k,
                                      bool adjusted = true, FILE* fout = stdout ) const;
@@ -38,7 +34,14 @@ class sequencing_bias
         ~sequencing_bias();
 
     private:
-        void hash_reads( table* T, samfile_t* reads_fn ) const;
+        sequencing_bias();
+        void build( const char* ref_fn,
+                    const char* reads_fn,
+                    pos L, pos R, unsigned int k,
+                    const char* training_seqname = NULL );
+
+        void hash_reads( table* T, samfile_t* reads_fn,
+                         const char* training_seqname = NULL ) const;
         void sample_foreground( char* seq, size_t seqlen,
                                 struct hashed_value* v );
         void sample_background( char* seq, size_t seqlen,

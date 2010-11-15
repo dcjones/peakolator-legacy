@@ -12,19 +12,19 @@ class dataset
 {
     public:
         dataset( const char* fasta_fn, const char* bam_fn,
-                 pos bias_L, pos bias_R, unsigned int bias_k );
+                 pos bias_L, pos bias_R, unsigned int bias_k,
+                 const char* training_seqname = NULL );
 
         dataset* copy() const;
-
-        const sequencing_bias& get_bias() const;
 
         void fit_null_distr( interval_stack* is, double* r, double* p );
 
         ~dataset();
 
+        sequencing_bias* bias;
+
     private:
         dataset();
-        sequencing_bias* bias;
 
         /* reads file */
         samfile_t*   reads_f;

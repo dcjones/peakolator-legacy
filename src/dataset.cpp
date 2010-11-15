@@ -21,13 +21,15 @@ using namespace std;
 
 dataset::dataset(
         const char* ref_fn, const char* reads_fn,
-        pos bias_L, pos bias_R, unsigned int bias_k )
+        pos bias_L, pos bias_R, unsigned int bias_k,
+        const char* training_seqname )
 {
     log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
 
     if( ref_fn ) {
-        bias = new sequencing_bias();
-        bias->build( ref_fn, reads_fn, bias_L, bias_R, bias_k );
+        bias = new sequencing_bias( ref_fn, reads_fn,
+                                    bias_L, bias_R, bias_k,
+                                    training_seqname );
     }
     else bias = NULL;
 
@@ -83,10 +85,6 @@ dataset::~dataset()
     free(reads_fn);
 }
 
-const sequencing_bias& dataset::get_bias() const
-{
-    return *bias;
-}
 
 /* fit a negative binomial distribution to a number of training samples */
 double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )

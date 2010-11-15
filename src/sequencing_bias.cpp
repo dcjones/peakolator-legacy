@@ -46,7 +46,8 @@ sequencing_bias::sequencing_bias()
 
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
-                                  pos L, pos R, unsigned int k )
+                                  pos L, pos R, unsigned int k,
+                                  const char* training_seqname )
     : ws(NULL)
     , fg(NULL)
     , bg(NULL)
@@ -56,7 +57,7 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
     , ref_fn(NULL)
     , reads_fn(NULL)
 {
-    build( ref_fn, reads_fn, L, R , k );
+    build( ref_fn, reads_fn, L, R , k, training_seqname );
 }
 
 sequencing_bias* sequencing_bias::copy() const
@@ -120,7 +121,8 @@ void sequencing_bias::clear()
 
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
-                             pos L, pos R, unsigned int k )
+                             pos L, pos R, unsigned int k,
+                             const char* training_seqname )
 {
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
     log_indent();
@@ -161,7 +163,7 @@ void sequencing_bias::build( const char* ref_fn,
     }
 
     table T;
-    hash_reads( &T, reads_f );
+    hash_reads( &T, reads_f, training_seqname );
 
 
 
@@ -657,16 +659,32 @@ void sequencing_bias::sample_background( char* seq, size_t seqlen,
 }
 
 
-void sequencing_bias::hash_reads( table* T, samfile_t* reads_f ) const
+void sequencing_bias::hash_reads( table* T, samfile_t* reads_f,
+                                  const char* training_seqname ) const
 {
     log_puts( LOG_MSG, "hashing read positions..." );
+
+
+    /* Restrict the table to reads aligned to the given seqname. */
+    /* Find the corresponding tid. */
+    int i, training_tid = -1;
+    if( training_seqname != NULL ) {
+        for( i = 0; i < reads_f->header->n_targets; i++ ) {
+            if( strcmp( reads_f->header->target_name[i], training_seqname ) == 0 ) {
+                training_tid = i;
+                break;
+            }
+        }
+    }
 
     table_create(T);
 
     bam1_t* read = bam_init1();
 
     while( samread( reads_f, read ) > 0 ) {
-        table_inc( T, read );
+        if( training_tid == -1 || read->core.tid == training_tid ) {
+            table_inc( T, read );
+        }
     }
     bam_destroy1(read);
 }
