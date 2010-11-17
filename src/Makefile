@@ -12,6 +12,7 @@ OBJ=common.o \
 	context.o \
 	emppval.o \
 	sequencing_bias.o \
+	kmers.o \
 	superfasthash.o \
 	hash.o \
 	gmpfrxx/libgmpfrxx.a \

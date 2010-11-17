@@ -35,8 +35,6 @@ sequencing_bias::sequencing_bias()
     : ws(NULL)
     , fg(NULL)
     , bg(NULL)
-    , bgs(NULL)
-    , bg_div(NULL)
     , ref_f(NULL)
     , ref_fn(NULL)
     , reads_fn(NULL)
@@ -52,8 +50,6 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
     : ws(NULL)
     , fg(NULL)
     , bg(NULL)
-    , bgs(NULL)
-    , bg_div(NULL)
     , ref_f(NULL)
     , ref_fn(NULL)
     , reads_fn(NULL)
@@ -87,17 +83,9 @@ sequencing_bias* sequencing_bias::copy() const
     }
     else sb->ref_f = NULL;
 
-    sb->ws = (double*)safe_malloc( m*sizeof(double) );
-    memcpy( sb->ws, ws, m*sizeof(double) );
-
-    sb->fg = (double*)safe_malloc( m*sizeof(double) );
-    memcpy( sb->fg, fg, m*sizeof(double) );
-
-    sb->fg = (double*)safe_malloc( four_to_k*sizeof(double) );
-    memcpy( sb->fg, fg, four_to_k*sizeof(double) );
-
-    sb->bgs = (double*)safe_malloc( four_to_k*2*bg_len*sizeof(double) );
-    memcpy( sb->bgs, bgs, four_to_k*2*bg_len*sizeof(double) );
+    sb->ws = new kmer_matrix(*ws);
+    sb->fg = new kmer_matrix(*fg);
+    sb->bg = new kmer_matrix(*bg);
 
     return sb;
 }
@@ -106,11 +94,9 @@ sequencing_bias* sequencing_bias::copy() const
 
 void sequencing_bias::clear()
 {
-    free(ws);     ws     = NULL;
-    free(fg);     fg     = NULL;
-    free(bg);     bg     = NULL;
-    free(bgs);    bgs    = NULL;
-    free(bg_div); bg_div = NULL;
+    delete ws; ws = NULL;
+    delete fg; fg = NULL;
+    delete bg; bg = NULL;
     if( ref_f ) {
         fai_destroy(ref_f);
         ref_f = NULL;
@@ -142,7 +128,7 @@ void sequencing_bias::build( const char* ref_fn,
     this->L = L;
     this->R = R;
 
-    unsigned int i, j;
+    unsigned int i;
 
     kmer_mask = 0;
     for( i = 0; i < k; i++ ) kmer_mask = (kmer_mask<<2) | 0x3;
@@ -201,18 +187,13 @@ void sequencing_bias::build( const char* ref_fn,
     }
 
 
-    fg  = (double*)safe_malloc( m*sizeof(double) );
-    memset( fg, 0, m*sizeof(double) );
-
-    bgs = (double*)safe_malloc(sizeof(double)*four_to_k*2*bg_len);
-    memset( bgs, 0, sizeof(double)*four_to_k*2*bg_len );
-
+    fg = new kmer_matrix( L+1+R, k );
+    bg = new kmer_matrix( 1, k );
+        
 
     /* initialize using pseudocounts */
-    for( i = 0; i < m; i++ ) fg[i] = pseudocount;
-    for( i = 0; i < four_to_k*2*bg_len; i++ ) bgs[i] = pseudocount;
-
-
+    fg->setall( pseudocount );
+    bg->setall( pseudocount );
 
 
     char*          seqname   = NULL;
@@ -255,71 +236,96 @@ void sequencing_bias::build( const char* ref_fn,
         sample_background( seq, seqlen, S[i], count_dups );
     }
 
+    log_unindent();
+
     free(seq);
     free(local_seq);
     samclose(reads_f);
     table_destroy(&T);
     free(S);
 
-
     /* normalize background kmer frequencies */
-    bg = (double*)safe_malloc(sizeof(double)*four_to_k);
-    memset( bg, 0, sizeof(double)*four_to_k );
-
-    for( i = 0; i < (unsigned int)2*bg_len; i++ ) {
-        for( j = 0; j < four_to_k; j++ ) {
-            bg[j] += bgs[i*four_to_k+j];
-        }
-    }
-
-    double z = 0.0;
-
-
-    /* normalize background */
-    for( j = 0; j < four_to_k; j++ ) z += bg[j];
-    for( j = 0; j < four_to_k; j++ ) bg[j] /= z;
-
-    /* normalize foreground */
-    for( i = 0; i < (unsigned int)(L+R+1); i++ ) {
-        z = 0.0;
-        for( j = 0; j < four_to_k; j++ ) z += fg[i*four_to_k+j];
-        for( j = 0; j < four_to_k; j++ ) fg[i*four_to_k+j] /= z;
-    }
-
-    /* normalize positional background  */
-    for( i = 0; i < (unsigned int)2*bg_len; i++ ) {
-        z = 0.0;
-        for( j = 0; j < four_to_k; j++ ) z += bgs[i*four_to_k+j];
-        for( j = 0; j < four_to_k; j++ ) bgs[i*four_to_k+j] /= z;
-    }
-
-
-
-    /* compute Kullback-Leibler distance for each background position */
-    bg_div = (double*)safe_malloc(sizeof(double)*2*bg_len);
-    for( i = 0; i < (unsigned int)2*bg_len; i++ ) {
-        bg_div[i] = kl_div( bgs+(i*four_to_k), bg, four_to_k );
-    }
-
-    log_unindent();
+    bg->dist_normalize();
+    fg->dist_normalize();
 
     compute_ws();
 
     log_unindent();
-
-
-    /*
-     * TODO:
-     * Here's the plan. We do a step back procedure, doing a greedy reduction of
-     * parameters, evaluating liklihood on several thousand randomly chosen
-     * reads, and minimizing the AIC.
-     *
-     * 1. sample 10000 sequences
-     * 2. write a function to evaluate liklihood
-     * 3. think about how to enumerate parameters and zero them out.
-     *
-     */
 }
+
+/* Return the log-liklihood of a number of sequences, given the current model in
+ * ws. */
+#if 0
+double sequencing_bias::ll( char** seqs )
+{
+    double l = 0.0;
+
+    unsigned int i;
+    kmer K = 0;
+
+    char* seq;
+    while( *seqs ) {
+        seq = *seqs++;
+        K = 0;
+
+        for( i = 0; i < L+1+R+(k-1); i++ ) {
+            K = ((K<<2) | nt2num( seq[i] )) & kmer_mask;
+
+            if( i >= k-1 ) {
+                l += log(ws[ (i-(k-1)) * four_to_k + K ]);
+            }
+        }
+    }
+
+    return l;
+}
+
+
+void sequencing_bias::back_step( char** seqs )
+{
+    /* backwards stepwise regression: 
+     * Starting with a large model (k-order markov chain), greedily drop parameters.
+     *
+     * fg should hold kmer frequencies (not a markov chain)
+     */
+
+    double ic_curr;
+    double ic_best;
+    int    i_best;
+    double size = m;
+
+    /* 0-1 array describing which parameters have been marginalized */
+    bool* marginalized = malloc( sizeof(bool) * k*(L+1+R) );
+    memset( marginalized, 0, sizeof(bool) * k*(L+1+R) );
+
+
+    int i,j,nt;
+
+    ic_curr = ll( seqs ) - size;
+
+    do {
+        /* one by one, remove each parameters, and compute aic */
+
+        i = 0;
+        ic_best = 0.0;
+
+        for( i = 0; i < L+1+R; i++ ) {
+            for( j = 0; j < k-1; j++ ) {
+                
+
+            }
+        }
+
+        /* remove the best */
+
+
+    } while( true );
+
+    free( marginalized );
+}
+#endif
+
+
 
 
 sequencing_bias::~sequencing_bias()
@@ -349,8 +355,9 @@ void sequencing_bias::sample_foreground( char* seq, size_t seqlen,
     kmer K = 0;
     for( j = 0; j < L+R+(pos)k; j++ ) {
         K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-        if( j >= (pos)(k-1) )
-            fg[ (j-(pos)(k-1))*four_to_k + K ] += count_dups ? v->count : 1;
+        if( j >= (pos)(k-1) ) {
+            fg->inc( j-(k-1), K, count_dups ? v->count : 1 );
+        }
     }
 }
 
@@ -385,8 +392,9 @@ void sequencing_bias::sample_background( char* seq, size_t seqlen,
         K = 0;
         for( j = 0; j < (unsigned int)bg_len+(k-1); j++ ) {
             K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-            if( j >= k-1 )
-                bgs[four_to_k*(j-(k-1))+K] += count_dups ? v->count : 1;
+            if( j >= k-1 ) {
+                bg->inc( 0, K, count_dups ? v->count : 1 );
+            }
         }
     }
 
@@ -415,8 +423,9 @@ void sequencing_bias::sample_background( char* seq, size_t seqlen,
         K = 0;
         for( j = 0; j < bg_len+(k-1); j++ ) {
             K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-            if( j >= k-1 )
-                bgs[four_to_k*(j+bg_len-(k-1))+K] += count_dups ? v->count : 1;
+            if( j >= k-1 ) {
+                bg->inc( 0, K, count_dups ? v->count : 1 );
+            }
         }
     }
 }
@@ -476,28 +485,26 @@ void sequencing_bias::markov_normalize( double* g, double* g_markov )
 
 void sequencing_bias::compute_ws()
 {
-    log_puts( LOG_MSG, "computing posterior probabilities..." );
+    kmer_matrix *fg_markov, *bg_markov;
 
-    double* bg_markov = (double*)safe_malloc( four_to_k*sizeof(double) );
-    markov_normalize( bg, bg_markov );
+    fg_markov = new kmer_matrix(*fg);
+    fg_markov->dist_conditionalize();
 
-    ws = (double*)safe_malloc( m*sizeof(double) );
-    memset( ws, 0, m*sizeof(double) );
+    bg_markov = new kmer_matrix(*bg);
+    bg_markov->dist_conditionalize();
 
-    double* fg_markov = (double*)safe_malloc( four_to_k*sizeof(double) );
-
-    pos i;
-    unsigned int j;
-    for( i = 0; i < L+1+R; i++ ) {
-        markov_normalize( fg+i*four_to_k, fg_markov );
-
-        for( j = 0; j < four_to_k; j++ ) {
-            ws[i*four_to_k+j] = fg_markov[j] / bg_markov[j];
+    size_t i;
+    kmer K;
+    for( i = 0; i < fg_markov->n(); i++ ) {
+        for( K = 0; K < fg_markov->m(); K++ ) {
+            fg_markov->set( i, K, fg_markov->get( i, K ) / 
+                                  bg_markov->get( 0, K ) );
         }
     }
 
-    free(fg_markov);
-    free(bg_markov);
+
+    ws = fg_markov;
+    delete bg_markov;
 }
 
 
@@ -535,7 +542,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
             K = ( (K<<2) | nt2num( local_seq[i+left_offset] ) ) & kmer_mask;
 
             for( j = max((pos)0,i-R); j <= min((pos)seqlen-1,i+L); j++ ) {
-                bias[j] *= ws[ (L+i-j)*four_to_k + K ];
+                bias[j] *= ws->get( L+i-j, K );
             }
         }
 

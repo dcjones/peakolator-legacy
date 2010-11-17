@@ -4,15 +4,11 @@
 
 
 #include "common.hpp"
+#include "kmers.hpp"
 #include "hash.h"
 
 #include "samtools/sam.h"
 #include "samtools/faidx.h"
-#include <boost/cstdint.hpp>
-
-
-/* kmers are encoded in 16 bits, allowing for k <= 8 */
-typedef boost::uint16_t kmer;
 
 class sequencing_bias
 {
@@ -23,16 +19,12 @@ class sequencing_bias
                          bool count_dups = true, double q = 0.1,
                          const char* training_seqname = NULL );
 
-        sequencing_bias* copy() const;
-
-        void clear();
-
-        void print_kmer_frequencies( pos L, pos R, unsigned int k,
-                                     bool adjusted = true, FILE* fout = stdout ) const;
+        ~sequencing_bias();
 
         double* get_bias( const char* seqname, pos start, pos end, int strand );
 
-        ~sequencing_bias();
+        sequencing_bias* copy() const;
+        void clear();
 
     private:
         sequencing_bias();
@@ -41,6 +33,9 @@ class sequencing_bias
                     pos L, pos R, unsigned int k,
                     bool count_dups = true, double q = 0.1,
                     const char* training_seqname = NULL );
+
+        void back_step( char** seqs );
+        double ll( char** seqs );
 
         void hash_reads( table* T, samfile_t* reads_fn,
                          const char* training_seqname = NULL ) const;
@@ -61,13 +56,13 @@ class sequencing_bias
         pos L, R; /* left and right sequence context */
 
         /* posterior frequencing probabilities */
-        double* ws;
+        kmer_matrix* ws;
 
         /* kmer frequencies surrounding the read start */
-        double* fg;
+        kmer_matrix* fg;
 
         /* background kmer frequencies */
-        double* bg;
+        kmer_matrix* bg;
 
         /* kmer bitmask */
         kmer kmer_mask;
@@ -75,9 +70,6 @@ class sequencing_bias
         /* 4^k, precomputed for conveniance */
         size_t four_to_k;
 
-        /* background distribution to which we are calibrating */
-        double* bgs;    /* kmer frequencies across a window */
-        double* bg_div; /* KL divergance sample */
 
         /* background is sampled by considering two regions of size bg_len.  One
          * 'bg_left' to the left of the read start and the other 'bg_right' to
