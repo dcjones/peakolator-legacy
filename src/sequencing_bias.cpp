@@ -47,6 +47,7 @@ sequencing_bias::sequencing_bias()
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
                                   pos L, pos R, unsigned int k,
+                                  bool count_dups, double q,
                                   const char* training_seqname )
     : ws(NULL)
     , fg(NULL)
@@ -57,7 +58,7 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
     , ref_fn(NULL)
     , reads_fn(NULL)
 {
-    build( ref_fn, reads_fn, L, R , k, training_seqname );
+    build( ref_fn, reads_fn, L, R , k, count_dups, q, training_seqname );
 }
 
 sequencing_bias* sequencing_bias::copy() const
@@ -122,6 +123,7 @@ void sequencing_bias::clear()
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
                              pos L, pos R, unsigned int k,
+                             bool count_dups, double q,
                              const char* training_seqname )
 {
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
@@ -173,13 +175,19 @@ void sequencing_bias::build( const char* ref_fn,
      * extremely abundant reads */
     struct hashed_value** S;
 
-    /* sort by position so we can read the reference sequence one chromosome at
-     * a time */
-    log_puts( LOG_MSG, "sorting read positions ... " );
-    table_sort_by_position( &T, &S );
+    log_puts( LOG_MSG, "sorting by count ... " );
+    table_sort_by_count( &T, &S );
     log_puts( LOG_MSG, "done.\n" );
 
-    n = T.m;
+
+    /* ignore the top q*n */
+    unsigned int n = T.m - (unsigned int)((double)T.m * q);
+
+    /* resort the remaining (1-q)*n by position */
+    log_puts( LOG_MSG, "sorting by position ... " );
+    qsort( S, n, sizeof(struct hashed_value*), compare_hashed_pos );
+    log_puts( LOG_MSG, "done.\n" );
+
 
     /* sample foreground and background kmer frequencies */
     log_puts( LOG_MSG, "sampling sequence bias ...\n" );
@@ -243,14 +251,15 @@ void sequencing_bias::build( const char* ref_fn,
         if( seq == NULL ) continue;
 
 
-        sample_foreground( seq, seqlen, S[i] );
-        sample_background( seq, seqlen, S[i] );
+        sample_foreground( seq, seqlen, S[i], count_dups );
+        sample_background( seq, seqlen, S[i], count_dups );
     }
 
     free(seq);
     free(local_seq);
     samclose(reads_f);
     table_destroy(&T);
+    free(S);
 
 
     /* normalize background kmer frequencies */
@@ -297,6 +306,19 @@ void sequencing_bias::build( const char* ref_fn,
     compute_ws();
 
     log_unindent();
+
+
+    /*
+     * TODO:
+     * Here's the plan. We do a step back procedure, doing a greedy reduction of
+     * parameters, evaluating liklihood on several thousand randomly chosen
+     * reads, and minimizing the AIC.
+     *
+     * 1. sample 10000 sequences
+     * 2. write a function to evaluate liklihood
+     * 3. think about how to enumerate parameters and zero them out.
+     *
+     */
 }
 
 
@@ -307,272 +329,9 @@ sequencing_bias::~sequencing_bias()
 
 
 
-/* sample and print unadjusted and adjusted kmer frequencies. There's a fair
- * amount of code duplication with 'build', unfortuenately... */
-void sequencing_bias::print_kmer_frequencies( pos L_, pos R_, unsigned int k_,
-                                              bool adjusted, FILE* fout ) const
-{
-    unsigned int i;
-    pos j;
-
-    /* get a few constants out of the way */
-    unsigned int four_to_k_ = 1<<(2*k_);
-    unsigned int m_ = four_to_k_*(L_+R_+1);
-    kmer kmer_mask_ = 0;
-    for( i = 0; i < k_; i++ ) kmer_mask_ = (kmer_mask_<<2) | 0x3;
-
-
-    /* allocation */
-    double* freq = (double*)safe_malloc( m_*sizeof(double) );
-    memset( freq, 0, m_*sizeof(double) );
-
-    double* freq_adjusted = NULL;
-    if( adjusted ){
-        freq_adjusted = (double*)safe_malloc( m_*sizeof(double) );
-        memset( freq_adjusted, 0, m_*sizeof(double) );
-    }
-
-    samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
-    if( reads_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam file '%s'.", reads_fn );
-        exit(1);
-    }
-
-    /* hash read locations for efficiency, remove the top percentile to avoid
-     * overfitting */
-    table T;
-    hash_reads( &T, reads_f );
-    struct hashed_value** S;
-    table_sort_by_position( &T, &S );
-
-    unsigned int n = T.m;
-
-
-    char*          seqname   = NULL;
-    int            seqlen    = 0;
-    int            curr_tid  = -1;
-    char*          seq       = NULL;
-    kmer K;
-
-    double* kl_bg     = (double*)safe_malloc(sizeof(double)*four_to_k_);
-    memset( kl_bg, 0, four_to_k_*sizeof(double) );
-    char*   kl_bg_seq = (char*)safe_malloc(sizeof(char)*bg_len);
-
-    char* local_seq = (char*)safe_malloc(sizeof(char)*(L_+R_+k_+1));
-    char* bias_seq  = (char*)safe_malloc(sizeof(char)*(L+R+k+1));
-
-    for( i = 0; i < n; i++ ) {
-        if( S[i]->pos.tid != curr_tid ) {
-            seqname = reads_f->header->target_name[S[i]->pos.tid];
-            seqlen  = reads_f->header->target_len[S[i]->pos.tid];
-            if( seq ) free(seq); 
-
-            log_printf( LOG_MSG, "reading sequence '%s' ...\n", seqname );
-
-            seq = faidx_fetch_seq( ref_f, seqname, 0, seqlen-1, &seqlen );
-            for( char* c = seq; *c; c++ ) *c = tolower(*c);
-
-            if( seq == NULL ) {
-                log_puts( LOG_WARN, "warning: reference sequence not found, skipping." );
-            }
-
-            curr_tid = S[i]->pos.tid;
-        }
-
-        if( seq == NULL ) continue;
-
-
-        hashed_value* v = S[i];
-
-        /* sample background (left) */
-        kl_bg_seq[0] = '\0';
-        if( v->pos.strand ) {
-            if( v->pos.pos + bg_left < seqlen )  {
-                memcpy( kl_bg_seq,
-                        seq + v->pos.pos + bg_right,
-                        (bg_len+k_-1)*sizeof(char) );
-                seqrc( kl_bg_seq, bg_len+k_-1 );
-            }
-        }
-        else {
-            if( v->pos.pos > bg_len+bg_left-(pos)(k_-1) ) {
-                memcpy( kl_bg_seq,
-                        seq + v->pos.pos - bg_len - bg_left - (pos)(k_-1),
-                        (bg_len+k_-1)*sizeof(char) );
-            }
-        }
-
-        if( kl_bg_seq[0] ) {
-            K = 0;
-            for( j = 0; j < bg_len+((pos)k_-1); j++ ) {
-                K = ((K<<2) | nt2num(kl_bg_seq[j])) & kmer_mask_;
-                if( j >= (pos)k_-1 ) kl_bg[K] += 1;
-            }
-        }
-
-
-
-        /* sample background (right) */
-        kl_bg_seq[0] = '\0';
-        if( v->pos.strand ) {
-            if( v->pos.pos > bg_right + bg_len ) {
-                memcpy( kl_bg_seq,
-                        seq + v->pos.pos - (bg_right + bg_len),
-                        (bg_len+k_-1)*sizeof(char) );
-                seqrc( kl_bg_seq, bg_len+k_-1 );
-            }
-        }
-        else {
-            if( v->pos.pos + bg_right - ((pos)k_-1) < seqlen ) {
-                memcpy( kl_bg_seq,
-                        seq + v->pos.pos + bg_right,
-                        (bg_len+k_-1)*sizeof(char) );
-            }
-        }
-
-        if( kl_bg_seq[0] ) {
-            K = 0;
-            for( j = 0; j < bg_len+((pos)k_-1); j++ ) {
-                K = ((K<<2) | nt2num(kl_bg_seq[j])) & kmer_mask_;
-                if( j >= (pos)k_-1 ) kl_bg[K] += 1;
-            }
-        }
-
-
-
-        /* sample foreground */
-        if( v->pos.strand ) {
-            if( v->pos.pos < R ||  v->pos.pos < R_ ) continue;
-            memcpy( local_seq, seq + v->pos.pos - R_, (L_+R_+k_)*sizeof(char) );
-            seqrc( local_seq, L_+R_+k_ );
-
-            memcpy( bias_seq, seq + v->pos.pos - R, (L+R+k)*sizeof(char) );
-            seqrc( bias_seq,  L+R+k );
-        }
-        else {
-            if( v->pos.pos < L_+(pos)(k_-1) ) continue;
-            memcpy( local_seq, seq + (v->pos.pos-L_-(k_-1)), (L_+R_+k_)*sizeof(char) );
-            memcpy( bias_seq,  seq + (v->pos.pos-L-(k-1)), (L+R+k)*sizeof(char) );
-        }
-
-        
-
-        /* sample kmers */
-        K = 0;
-        for( j = 0; j < L_+R_+(pos)k_; j++ ) {
-            K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask_;
-            if( j >= (pos)(k_-1) ) {
-                freq[ (j-(pos)(k_-1))*four_to_k_ + K ] += 1;
-            }
-        }
-
-        /* sample adjusted kmer frequencies */
-        if( adjusted ) {
-            double w = 1.0;
-            K = 0;
-            for( j = 0; j < L+R+(pos)k; j++ ) {
-                K = ((K<<2) | nt2num(bias_seq[j])) & kmer_mask;
-                if( j >= (pos)(k-1) ) {
-                    w *= ws[ (j-(pos)(k-1))*four_to_k + K ];
-                }
-            }
-
-            K = 0;
-            for( j = 0; j < L_+R_+(pos)k_; j++ ) {
-                K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask_;
-                if( j >= (pos)(k_-1) ) {
-                    freq_adjusted[ (j-(pos)(k_-1))*four_to_k_ + K ] += 1.0/w;
-                }
-            }
-        }
-    }
-
-    /* normalize */
-    double z;
-    for( j = 0; j < L_+R_+1; j++ ) {
-        z = 0.0;
-        for( K = 0; K < four_to_k_; K++ ) {
-            z += freq[ j*four_to_k_+K ];
-        }
-
-        for( K = 0; K < four_to_k_; K++ ) {
-            freq[ j*four_to_k_+K ] /= z;
-        }
-    }
-
-    if( adjusted ) {
-        for( j = 0; j < L_+R_+1; j++ ) {
-            z = 0.0;
-            for( K = 0; K < four_to_k_; K++ ) {
-                z += freq_adjusted[ j*four_to_k_+K ];
-            }
-
-            for( K = 0; K < four_to_k_; K++ ) {
-                freq_adjusted[ j*four_to_k_+K ] /= z;
-            }
-        }
-    }
-
-    z = 0.0;
-    for( K = 0; K < four_to_k_; K++ ) z += kl_bg[K];
-    for( K = 0; K < four_to_k_; K++ ) kl_bg[K] /= z;
-    
-
-    /* compute kl divergance for each position */
-    double* kl = (double*)safe_malloc( (L_+R_+1)*sizeof(double) );
-    double* kl_adjusted = NULL;
-    if( adjusted ) kl_adjusted = (double*)safe_malloc( (L_+R_+1)*sizeof(double) );
-
-    for( j = 0; j < L_+R_+1; j++ ) {
-        kl[j] = kl_div( kl_bg, freq+(j*four_to_k_), four_to_k_ );
-        if( adjusted ) {
-            kl_adjusted[j] = kl_div( kl_bg, freq_adjusted+(j*four_to_k_), four_to_k_ );
-        }
-    }
-
-
-
-
-    /* print */
-    char* ntstr = (char*)safe_malloc( (k_+1)*sizeof(char) );
-    for( j = 0; j < L_+R_+1; j++ ) {
-        fprintf( fout, "%ld\tNA\t%e\tunadjusted\n", j - L_, kl[j] );
-        if( adjusted ) {
-            fprintf( fout, "%ld\tNA\t%e\tadjusted\n", j - L_, kl_adjusted[j] );
-        }
-
-        for( K = 0; K < four_to_k_; K++ ) {
-            num2nt( K, ntstr, k_ );
-            fprintf( fout, "%ld\t%s\t%e\tunadjusted\n", j - L_, ntstr, freq[j*four_to_k_+K] );
-            if( adjusted ) {
-                fprintf( fout, "%ld\t%s\t%e\tadjusted\n", j - L_,
-                        ntstr, freq_adjusted[j*four_to_k_+K] );
-            }
-        }
-    }
-
-    free(ntstr);
-
-
-    free(S);
-    free(kl_bg);
-    free(kl_bg_seq);
-    free(local_seq);
-    free(bias_seq);
-    samclose(reads_f);
-
-    free(kl);
-    free(kl_adjusted);
-    free(freq);
-    free(freq_adjusted);
-}
-
-
-
-
-
 void sequencing_bias::sample_foreground( char* seq, size_t seqlen,
-                                         struct hashed_value* v )
+                                         struct hashed_value* v,
+                                         bool count_dups )
 {
     pos j;
 
@@ -590,13 +349,15 @@ void sequencing_bias::sample_foreground( char* seq, size_t seqlen,
     kmer K = 0;
     for( j = 0; j < L+R+(pos)k; j++ ) {
         K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-        if( j >= (pos)(k-1) ) fg[ (j-(pos)(k-1))*four_to_k + K ] += 1;
+        if( j >= (pos)(k-1) )
+            fg[ (j-(pos)(k-1))*four_to_k + K ] += count_dups ? v->count : 1;
     }
 }
 
 
 void sequencing_bias::sample_background( char* seq, size_t seqlen,
-                                         struct hashed_value* v )
+                                         struct hashed_value* v,
+                                         bool count_dups )
 {
     kmer K;
     unsigned int j;
@@ -624,7 +385,8 @@ void sequencing_bias::sample_background( char* seq, size_t seqlen,
         K = 0;
         for( j = 0; j < (unsigned int)bg_len+(k-1); j++ ) {
             K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-            if( j >= k-1 ) bgs[four_to_k*(j-(k-1))+K] += 1;
+            if( j >= k-1 )
+                bgs[four_to_k*(j-(k-1))+K] += count_dups ? v->count : 1;
         }
     }
 
@@ -653,7 +415,8 @@ void sequencing_bias::sample_background( char* seq, size_t seqlen,
         K = 0;
         for( j = 0; j < bg_len+(k-1); j++ ) {
             K = ((K<<2) | nt2num(local_seq[j])) & kmer_mask;
-            if( j >= k-1 ) bgs[four_to_k*(j+bg_len-(k-1))+K] += 1;
+            if( j >= k-1 )
+                bgs[four_to_k*(j+bg_len-(k-1))+K] += count_dups ? v->count : 1;
         }
     }
 }

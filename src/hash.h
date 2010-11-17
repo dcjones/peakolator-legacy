@@ -64,6 +64,9 @@ void table_sort_by_position( struct table* T,
 
 void rehash_tail( struct table* T, int32_t q1, int32_t q2 );
  
+int compare_hashed_pos( const void* x, const void* y );
+
+
 #ifdef __cplusplus
 }
 #endif

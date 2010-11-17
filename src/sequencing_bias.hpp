@@ -20,6 +20,7 @@ class sequencing_bias
         sequencing_bias( const char* ref_fn,
                          const char* reads_fn,
                          pos L, pos R, unsigned int k,
+                         bool count_dups = true, double q = 0.1,
                          const char* training_seqname = NULL );
 
         sequencing_bias* copy() const;
@@ -38,14 +39,17 @@ class sequencing_bias
         void build( const char* ref_fn,
                     const char* reads_fn,
                     pos L, pos R, unsigned int k,
+                    bool count_dups = true, double q = 0.1,
                     const char* training_seqname = NULL );
 
         void hash_reads( table* T, samfile_t* reads_fn,
                          const char* training_seqname = NULL ) const;
         void sample_foreground( char* seq, size_t seqlen,
-                                struct hashed_value* v );
+                                struct hashed_value* v,
+                                bool count_dups = true );
         void sample_background( char* seq, size_t seqlen,
-                                struct hashed_value* v );
+                                struct hashed_value* v,
+                                bool count_dup = true );
         void compute_ws();
         void markov_normalize( double* g, double* g_markov );
 

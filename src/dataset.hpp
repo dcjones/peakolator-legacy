@@ -13,6 +13,7 @@ class dataset
     public:
         dataset( const char* fasta_fn, const char* bam_fn,
                  pos bias_L, pos bias_R, unsigned int bias_k,
+                 bool count_dups = true, double q = 0.1,
                  const char* training_seqname = NULL );
 
         dataset* copy() const;

@@ -155,7 +155,7 @@ int compare_count( const void* x, const void* y )
     return (*a)->count - (*b)->count;
 }
 
-int compare_pos( const void* x, const void* y )
+int compare_hashed_pos( const void* x, const void* y )
 {
     struct hashed_value* const * a = x;
     struct hashed_value* const * b = y;
@@ -202,7 +202,7 @@ void table_sort_by_count( struct table* T,
 void table_sort_by_position( struct table* T,
                     struct hashed_value*** S_ )
 {
-    sort_table( T, S_, compare_pos );
+    sort_table( T, S_, compare_hashed_pos );
 }
 
 
