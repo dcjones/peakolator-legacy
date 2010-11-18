@@ -100,9 +100,7 @@ cdef extern from "dataset.hpp":
 
     c_dataset* new_dataset "new dataset" ( \
             char* fasta_fn, char* bam_fn, \
-            pos bias_L, pos bias_R, unsigned int bias_k,
-            bool count_dups, double q,
-            char* training_seqname )
+            size_t bias_n, pos bias_L, pos bias_R )
 
     void del_dataset "delete" ( c_dataset* dataset )
 
@@ -289,32 +287,21 @@ cdef class dataset:
     def __cinit__( self, *args ):
         cdef char* fasta_fn_cstr    = NULL
         cdef char* training_seqname = NULL
-        cdef double q = 0.1
-        cdef bool count_dups = True
+        cdef size_t bias_n = 0
 
-        if len(args) >= 5:
-            (fasta_fn,bam_fn,bias_L,bias_R,bias_k) = args[:5]
+        if len(args) == 5:
+            (fasta_fn,bam_fn,bias_n,bias_L,bias_R) = args[:6]
 
             if fasta_fn is not None:
                 fasta_fn_cstr = fasta_fn
 
-            if len(args) > 5:
-                count_dups = args[5]
-
-            if len(args) > 6:
-                q = args[6]
-
-            if len(args) > 7:
-                training_seqname = args[7]
-
             self.cthis = new_dataset(
-                            fasta_fn_cstr, \
-                            bam_fn, \
-                            bias_L, bias_R, bias_k,
-                            count_dups, q,
-                            training_seqname )
-        else:
+                            fasta_fn_cstr, bam_fn, \
+                            bias_n, bias_L, bias_R )
+        elif len(args) == 1:
             self.cthis = (<dataset>args[0]).cthis.copy()
+        else:
+            raise Exception( 'Wrong number of parameters.' )
 
 
     def get_bias( self, chrom, start, end, strand ):

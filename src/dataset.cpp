@@ -21,17 +21,13 @@ using namespace std;
 
 dataset::dataset(
         const char* ref_fn, const char* reads_fn,
-        pos bias_L, pos bias_R, unsigned int bias_k,
-        bool count_dups, double q,
-        const char* training_seqname )
+        size_t bias_n, pos bias_L, pos bias_R )
 {
     log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
 
     if( ref_fn ) {
         bias = new sequencing_bias( ref_fn, reads_fn,
-                                    bias_L, bias_R, bias_k,
-                                    count_dups, q,
-                                    training_seqname );
+                                    bias_n, bias_L, bias_R );
     }
     else bias = NULL;
 

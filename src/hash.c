@@ -11,7 +11,7 @@
 #include "superfasthash.h"
 
 
-#define INITIAL_TABLE_SIZE 128
+#define INITIAL_TABLE_SIZE 10000
 #define MAX_LOAD 0.75
 #define MIN_LOAD 0.05 /* make sure this is less than MAX_LOAD/2 */
 

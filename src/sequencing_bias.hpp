@@ -15,9 +15,7 @@ class sequencing_bias
     public:
         sequencing_bias( const char* ref_fn,
                          const char* reads_fn,
-                         pos L, pos R, unsigned int k,
-                         bool count_dups = true, double q = 0.1,
-                         const char* training_seqname = NULL );
+                         size_t n, pos L, pos R );
 
         ~sequencing_bias();
 
@@ -30,15 +28,13 @@ class sequencing_bias
         sequencing_bias();
         void build( const char* ref_fn,
                     const char* reads_fn,
-                    pos L, pos R, unsigned int k,
-                    bool count_dups = true, double q = 0.1,
-                    const char* training_seqname = NULL );
+                    size_t n, pos L, pos R );
 
         void back_step( char** seqs );
         double ll( char** seqs );
 
         void hash_reads( table* T, samfile_t* reads_fn,
-                         const char* training_seqname = NULL ) const;
+                         size_t limit = 0 ) const;
         void sample_foreground( char* seq, size_t seqlen,
                                 struct hashed_value* v,
                                 bool count_dups = true );
@@ -50,33 +46,8 @@ class sequencing_bias
 
         static const double pseudocount;
 
-        unsigned int n;    /* number of positions being considered */
-        unsigned int m;    /* size of the weight vector: 4^k * (L+R+1) */
-        unsigned int k;    /* kmer size */
+        unsigned int n;    /* number observations to train on */
         pos L, R; /* left and right sequence context */
-
-        /* posterior frequencing probabilities */
-        kmer_matrix* ws;
-
-        /* kmer frequencies surrounding the read start */
-        kmer_matrix* fg;
-
-        /* background kmer frequencies */
-        kmer_matrix* bg;
-
-        /* kmer bitmask */
-        kmer kmer_mask;
-
-        /* 4^k, precomputed for conveniance */
-        size_t four_to_k;
-
-
-        /* background is sampled by considering two regions of size bg_len.  One
-         * 'bg_left' to the left of the read start and the other 'bg_right' to
-         * the right. */
-        pos bg_left;
-        pos bg_right;
-        pos bg_len;
 
         char*   local_seq; /* used while sampling */
 
