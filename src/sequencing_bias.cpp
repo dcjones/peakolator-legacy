@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cctype>
+#include <gsl/gsl_math.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include "samtools/faidx.h"
@@ -14,29 +15,15 @@ using namespace std;
 
 
 
-double sq( double x ) { return x*x; }
-
 
 /* pseudocount used when sampling foreground and background nucleotide * frequencies */
 const double sequencing_bias::pseudocount = 1;
 
 
-/* compute the Kullback-Leibler divergance for two multinomial distributions */
-double kl_div( const double* a, const double* b, size_t n )
-{
-    double kl = 0.0;
-    uint32_t i;
-    for( i = 0; i < n; i++ ) {
-        kl += a[i] * log( a[i] / b[i] );
-    }
-    return kl;
-}
-
-
 sequencing_bias::sequencing_bias()
     : ref_f(NULL)
     , ref_fn(NULL)
-    , reads_fn(NULL)
+    , M0(NULL), M1(NULL)
 {}
 
 
@@ -46,7 +33,7 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
                                   size_t n, pos L, pos R )
     : ref_f(NULL)
     , ref_fn(NULL)
-    , reads_fn(NULL)
+    , M0(NULL), M1(NULL)
 {
     build( ref_fn, reads_fn, n, L, R );
 }
@@ -54,12 +41,15 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
 sequencing_bias* sequencing_bias::copy() const
 {
     sequencing_bias* sb = new sequencing_bias();
-    sb->n = n;
     sb->L = L;
     sb->R = R;
 
+    if( M0 && M1 ) {
+        sb->M0 = new motif( *M0 );
+        sb->M1 = new motif( *M1 );
+    }
+
     sb->ref_fn   = ref_fn   ? strdup(ref_fn)   : NULL;
-    sb->reads_fn = reads_fn ? strdup(reads_fn) : NULL;
 
     if( ref_fn ) {
         sb->ref_f = fai_load(ref_fn);
@@ -82,7 +72,10 @@ void sequencing_bias::clear()
         ref_f = NULL;
     }
     free(ref_fn);  ref_fn   = NULL;
-    free(reads_fn);reads_fn = NULL;
+
+    delete M0;
+    delete M1;
+    M0 = M1 = NULL;
 }
 
 
@@ -97,7 +90,6 @@ void sequencing_bias::build( const char* ref_fn,
     gsl_rng* rng = gsl_rng_alloc(gsl_rng_mt19937);
 
     this->ref_fn   = strdup(ref_fn);
-    this->reads_fn = strdup(reads_fn);
     
     this->L = L;
     this->R = R;
@@ -141,6 +133,7 @@ void sequencing_bias::build( const char* ref_fn,
     int            curr_tid  = -1;
     char*          seq       = NULL;
 
+    char* local_seq;
     local_seq = (char*)safe_malloc(sizeof(char)*(L+R+2));
     local_seq[L+R+1] = '\0';
 
@@ -195,7 +188,6 @@ void sequencing_bias::build( const char* ref_fn,
 
         S[i]->pos.pos += bg_offset;
 
-        /* add a foreground sequence */
         if( S[i]->pos.strand ) {
             if( S[i]->pos.pos < R ) continue;
             memcpy( local_seq, seq + S[i]->pos.pos - R, (L+1+R)*sizeof(char) );
@@ -211,13 +203,12 @@ void sequencing_bias::build( const char* ref_fn,
 
 
     size_t max_k = 5;
-    motif M0( L+1+R, max_k, &bg );
-    motif M1( L+1+R, max_k, &fg );
+    M0 = new motif( L+1+R, max_k, &bg );
+    M1 = new motif( L+1+R, max_k, &fg );
 
-    train_motifs( M0, M1 );
+    train_motifs( *M0, *M1 );
 
 
-    /* TODO: keep these, clean them up with the destructor */
     std::deque<sequence*>::iterator i_seq;
     for( i_seq = fg.begin(); i_seq != fg.end(); i_seq++ ) {
         delete *i_seq;
@@ -230,11 +221,11 @@ void sequencing_bias::build( const char* ref_fn,
 
     log_unindent();
 
+    free(S);
     free(seq);
     free(local_seq);
     samclose(reads_f);
     table_destroy(&T);
-    free(S);
     gsl_rng_free(rng);
 
     log_unindent();
@@ -266,7 +257,43 @@ void sequencing_bias::hash_reads( table* T, samfile_t* reads_f, size_t limit ) c
 
 double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int strand )
 {
-    /* TODO */
-    return NULL;
+    if( strand < 0 || ref_f == NULL || M0 == NULL || M1 == NULL ) return NULL;
+
+    pos i;
+    pos   seqlen = end - start + 1;
+
+    double* bias = (double*)safe_malloc( seqlen * sizeof(double) );
+    for( i = 0; i < seqlen; i++ ) bias[i] = 1.0;
+
+    char* seqstr;
+
+    if( strand == 1 ) {
+        seqstr = faidx_fetch_seq_forced_lower( ref_f, seqname,
+                                               start-R, end+L );
+        if( seqstr ) seqrc( seqstr, seqlen );
+    }
+    else {
+        seqstr = faidx_fetch_seq_forced_lower( ref_f, seqname,
+                                               start-L, end+R );
+    }
+
+
+    if( !seqstr ) return bias;
+
+    sequence* seq = new sequence( seqstr );
+    double L0, L1;
+
+    for( i = 0; i < seqlen; i++ ) {
+        L0 = M0->eval( *seq, L+i );
+        L1 = M0->eval( *seq, L+i );
+
+        bias[i] = L1 / L0;
+        if( !gsl_finite(bias[i]) ) bias[i] = 1.0;
+    }
+
+    delete seq;
+    free(bias);
+
+    return bias;
 }
 

@@ -78,7 +78,7 @@ class sequence
         ~sequence();
 
         kmer get( size_t i ) const;
-        bool get( const bool* indexes, size_t maxn, kmer& K ) const;
+        bool get( const bool* indexes, size_t maxn, kmer& K, size_t offset = 0 ) const;
 
 
     private:
@@ -92,19 +92,20 @@ class sequence
 
 
 
-/* A bayesian network representing sequence probability. */
+/* A 'bayesian' network representing sequence probability. */
 
 
 class motif
 {
     public:
         motif( size_t n, size_t k, const std::deque<sequence*>* data );
+        motif( const motif& );
         ~motif();
 
         void add_edge( size_t i, size_t j );
         void rem_edge( size_t i, size_t j );
 
-        double eval( const sequence& );
+        double eval( const sequence&, size_t offset = 0 );
 
         size_t num_params() const;
 
@@ -136,8 +137,5 @@ void train_motifs( motif& M0, motif& M1 );
 
 
 #endif
-
-
-
 
 

@@ -30,31 +30,24 @@ class sequencing_bias
                     const char* reads_fn,
                     size_t n, pos L, pos R );
 
-        void back_step( char** seqs );
-        double ll( char** seqs );
 
         void hash_reads( table* T, samfile_t* reads_fn,
                          size_t limit = 0 ) const;
-        void sample_foreground( char* seq, size_t seqlen,
-                                struct hashed_value* v,
-                                bool count_dups = true );
-        void sample_background( char* seq, size_t seqlen,
-                                struct hashed_value* v,
-                                bool count_dup = true );
-        void compute_ws();
-        void markov_normalize( double* g, double* g_markov );
+
+
+
+        /* left and right sequence context */
+        pos L, R;
+
+        /* reference sequence */
+        faidx_t* ref_f;
+        char*    ref_fn;
+
+        /* trained background (M0) and foreground (M1) models */
+        motif* M0;
+        motif* M1;
 
         static const double pseudocount;
-
-        unsigned int n;    /* number observations to train on */
-        pos L, R; /* left and right sequence context */
-
-        char*   local_seq; /* used while sampling */
-
-        faidx_t* ref_f;
-
-        char* ref_fn;
-        char* reads_fn;
 };
 
 

@@ -207,7 +207,7 @@ kmer sequence::get( size_t i ) const
 }
 
 
-bool sequence::get( const bool* indexes, size_t maxn, kmer& K ) const
+bool sequence::get( const bool* indexes, size_t maxn, kmer& K, size_t offset ) const
 {
     bool nonempty = false;
     size_t j, l;
@@ -216,8 +216,8 @@ bool sequence::get( const bool* indexes, size_t maxn, kmer& K ) const
     for( i = 0; i < maxn; i++ ) {
         if( indexes[i] ) {
             nonempty = true;
-            j = i / kmer_max_k;
-            l = i % kmer_max_k;
+            j = (i+offset) / kmer_max_k;
+            l = (i+offset) % kmer_max_k;
             K = (K<<2) | ((xs[j] >> l) & 0x3);
         }
         i++;
@@ -239,6 +239,20 @@ motif::motif( size_t n, size_t k, const std::deque<sequence*>* data )
     memset( parents, 0, n*n*sizeof(bool) );
 }
 
+
+motif::motif( const motif& M )
+{
+    P = new kmer_matrix( *M.P );
+    n    = M.n;
+    k    = M.k;
+    data = M.data;
+
+    parents = new bool[n*n];
+    memcpy( parents, M.parents, n*n*sizeof(bool) );
+}
+
+
+
 motif::~motif()
 {
     delete[] parents;
@@ -246,7 +260,7 @@ motif::~motif()
 }
 
 
-double motif::eval( const sequence& seq )
+double motif::eval( const sequence& seq, size_t offset )
 {
     double l = 0.0; /* log likelihood */
 
@@ -254,7 +268,7 @@ double motif::eval( const sequence& seq )
     size_t i;
     kmer K;
     for( i = 0; i < n; i++ ) {
-        if( !seq.get( parents + i*n, n, K ) ) continue;
+        if( !seq.get( parents + i*n, n, K, offset ) ) continue;
         l += log( P->get( i, K ) );
     }
 
@@ -291,7 +305,7 @@ bool motif::has_edge( size_t i, size_t j )
 
 void motif::set_edge( size_t i, size_t j, bool x )
 {
-    parents[j*n+i] = true;
+    parents[j*n+i] = x;
 }
 
 
@@ -360,6 +374,33 @@ double motif_log_likelihood( motif& M0, motif& M1 )
 }
 
 
+/* various information criterion to try */
+
+/* Akaike Information Criterion */
+double aic( double L, double n_obs, double n_params )
+{
+    return L - n_params;
+}
+
+/* Bayesian Information Criterion */
+double bic( double L, double n_obs, double n_params )
+{
+    return L - (n_params/2.0) * log(n_obs);
+}
+
+
+/* Quasi-AIC */
+double qaic( double L, double n_obs, double n_params )
+{
+    /* this parameter set with trial and error */
+    const double c = 0.5;
+
+    return c*L - n_params;
+}
+
+
+
+
 void train_motifs( motif& M0, motif& M1 )
 {
     log_puts( LOG_MSG, "training motifs ...\n" );
@@ -372,21 +413,22 @@ void train_motifs( motif& M0, motif& M1 )
 
     size_t i, j;
 
-    double aic, aic_curr, aic_best;
+    double ic, ic_curr, ic_best;
     size_t j_best, i_best;
 
-    //double n_obs    = M0.data->size() + M1.data->size();
+    double n_obs    = M0.data->size() + M1.data->size();
     double n_params = M0.num_params() + M1.num_params();
 
     double L; /* log likelihood */
 
     L = motif_log_likelihood( M0, M1 );
-    aic_curr = L - n_params;
+    ic_curr = qaic( L, n_obs, n_params );
 
-    log_printf( LOG_MSG, "base aic = L - n = %0.4e - %f = %0.4e\n", L, n_params, aic_curr );
+
+    log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
 
     while( true ) {
-        aic_best = GSL_NEGINF;
+        ic_best = GSL_NEGINF;
         j_best = i_best = 0;
 
         log_puts( LOG_MSG, "trying edges ... \n" );
@@ -404,13 +446,13 @@ void train_motifs( motif& M0, motif& M1 )
 
                 L        = motif_log_likelihood( M0, M1 );
                 n_params = M0.num_params() + M1.num_params();
-                aic      = L - n_params;
-                log_printf( LOG_MSG, "edge (%zu, %zu): aic = L - n = %0.4e - %f = %0.4e\n",
-                                      j, j, L, n_params, aic );
+                ic       = qaic( L, n_obs, n_params );
+                log_printf( LOG_MSG, "edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
+                                      j, j, L, n_params, ic );
 
 
-                if( aic > aic_best ) {
-                    aic_best = aic;
+                if( ic > ic_best ) {
+                    ic_best = ic;
                     i_best = j;
                     j_best = j;
                 }
@@ -442,12 +484,12 @@ void train_motifs( motif& M0, motif& M1 )
 
                     L        = motif_log_likelihood( M0, M1 );
                     n_params = M0.num_params() + M1.num_params();
-                    aic      = L - n_params;
-                    log_printf( LOG_MSG, "edge (%zu, %zu): aic = L - n = %0.4e - %f = %0.4e\n",
-                                          i, j, L, n_params, aic );
+                    ic       = qaic( L, n_obs, n_params );
+                    log_printf( LOG_MSG, "edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
+                                          i, j, L, n_params, ic );
 
-                    if( aic > aic_best ) {
-                        aic_best = aic;
+                    if( ic > ic_best ) {
+                        ic_best = ic;
                         i_best = i;
                         j_best = j;
                     }
@@ -460,12 +502,12 @@ void train_motifs( motif& M0, motif& M1 )
             }
         }
 
-        log_printf( LOG_MSG, "best edge: (%zu,%zu) with aic = %0.4e\n",
-                             i_best, j_best, aic_best );
+        log_printf( LOG_MSG, "best edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
+                              i_best, j_best, L, n_params, ic_best );
 
-        if( aic_best <= aic_curr || aic_best == GSL_NEGINF ) break;
+        if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
 
-        aic_curr = aic_best;
+        ic_curr = ic_best;
         M0.add_edge( i_best, j_best );
         M1.add_edge( i_best, j_best );
 
