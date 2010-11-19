@@ -78,7 +78,7 @@ class sequence
         ~sequence();
 
         kmer get( size_t i ) const;
-        kmer get( const std::set<size_t>& ) const;
+        bool get( const bool* indexes, size_t maxn, kmer& K ) const;
 
 
     private:
@@ -112,12 +112,16 @@ class motif
         void restore_stored_row();
 
     private:
+        size_t num_parents( size_t i ) const;
+        bool has_edge( size_t i, size_t j );
+        void set_edge( size_t i, size_t j, bool );
+
         size_t n;
         size_t k;
         kmer_matrix* P;
 
         const std::deque<sequence*>* data;
-        std::set<size_t>* parents;
+        bool* parents;
 
         static const double pseudocount;
 

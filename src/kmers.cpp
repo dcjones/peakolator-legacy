@@ -207,18 +207,23 @@ kmer sequence::get( size_t i ) const
 }
 
 
-kmer sequence::get( const std::set<size_t>& indexes ) const
+bool sequence::get( const bool* indexes, size_t maxn, kmer& K ) const
 {
+    bool nonempty = false;
     size_t j, l;
-    kmer K = 0;
-    std::set<size_t>::const_iterator i;
-    for( i = indexes.begin(); i != indexes.end(); i++ ) {
-        j = *i / kmer_max_k;
-        l = *i % kmer_max_k;
-        K = (K<<2) | ((xs[j] >> l) & 0x3);
+    K = 0;
+    size_t i;
+    for( i = 0; i < maxn; i++ ) {
+        if( indexes[i] ) {
+            nonempty = true;
+            j = i / kmer_max_k;
+            l = i % kmer_max_k;
+            K = (K<<2) | ((xs[j] >> l) & 0x3);
+        }
+        i++;
     }
 
-    return K;
+    return nonempty;
 }
 
 
@@ -230,7 +235,8 @@ motif::motif( size_t n, size_t k, const std::deque<sequence*>* data )
     P = new kmer_matrix( n, k );
     P->setall( 1.0 );
 
-    parents = new std::set<size_t>[n];
+    parents = new bool[n*n];
+    memset( parents, 0, n*n*sizeof(bool) );
 }
 
 motif::~motif()
@@ -244,9 +250,12 @@ double motif::eval( const sequence& seq )
 {
     double l = 0.0; /* log likelihood */
 
+    const size_t n = P->n();
     size_t i;
-    for( i = 0; i < P->n(); i++ ) {
-        if( !parents[i].empty() ) l += log( P->get( i, seq.get( parents[i] ) ) );
+    kmer K;
+    for( i = 0; i < n; i++ ) {
+        if( !seq.get( parents + i*n, n, K ) ) continue;
+        l += log( P->get( i, K ) );
     }
 
     return l;
@@ -258,10 +267,31 @@ size_t motif::num_params() const
     size_t N = 0;
     size_t i;
     for( i = 0; i < n; i++ ) {
-        N += (1 << (2*parents[i].size())) - 1;
+        N += (1 << (2*num_parents(i))) - 1;
     }
 
     return N;
+}
+
+size_t motif::num_parents( size_t i ) const
+{
+    size_t j;
+    size_t M = 0;
+    for( j = 0; j <= i; j++ ) {
+        if( parents[i*n+j] ) M++;
+    }
+
+    return M;
+}
+
+bool motif::has_edge( size_t i, size_t j )
+{
+    return parents[j*n+i];
+}
+
+void motif::set_edge( size_t i, size_t j, bool x )
+{
+    parents[j*n+i] = true;
 }
 
 
@@ -287,10 +317,10 @@ void motif::add_edge( size_t i, size_t j )
         exit(1);
     }
 
-    parents[j].insert(i);
+    set_edge( i, j, true );
 
     P->setrow( j, 0.0 );
-    size_t m = 1 << (2*parents[j].size());
+    size_t m = 1 << (2*num_parents(j));
     kmer K;
     for( K = 0; K < m; K++ ) {
         P->set( j, K, pseudocount );
@@ -299,7 +329,7 @@ void motif::add_edge( size_t i, size_t j )
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
-        P->inc( j, (*seq)->get( parents[j] ) );
+        P->inc( j, (*seq)->get( parents[j*n] ) );
     }
 
     P->dist_normalize_row( j );
@@ -366,7 +396,7 @@ void train_motifs( motif& M0, motif& M1 )
 
 
             /* position j is not currently included in the model */
-            if( M0.parents[j].find( j ) == M0.parents[j].end() ) {
+            if( !M0.has_edge( j, j ) ) {
                 M0.store_row(j);
                 M1.store_row(j);
                 M0.add_edge( j, j );
@@ -385,8 +415,8 @@ void train_motifs( motif& M0, motif& M1 )
                     j_best = j;
                 }
         
-                M0.parents[j].erase(j);
-                M1.parents[j].erase(j);
+                M0.set_edge( j, j, false );
+                M1.set_edge( j, j, false );
                 M0.restore_stored_row();
                 M1.restore_stored_row();
 
@@ -394,14 +424,14 @@ void train_motifs( motif& M0, motif& M1 )
             /* position j is included in the model */
             else {
                 for( i = 0; i < j; i++ ) {
-                    if( M0.parents[j].find(i) != M0.parents[j].end() ) {
+                    if( M0.has_edge( i, j ) ) {
                         log_printf( LOG_MSG, "edge (%zu, %zu): edge exists\n", i, j );
                         continue;
                     }
 
-                    if( M0.parents[j].size() >= M0.k ) {
+                    if( M0.num_parents(j) >= M0.k ) {
                         log_printf( LOG_MSG, "edge (%zu, %zu): %zu already has %zu parents\n",
-                                    i, j, j, M0.parents[j].size() );
+                                    i, j, j, M0.num_parents(j) );
                         continue;
                     }
 
@@ -422,8 +452,8 @@ void train_motifs( motif& M0, motif& M1 )
                         j_best = j;
                     }
             
-                    M0.parents[j].erase(i);
-                    M1.parents[j].erase(i);
+                    M0.set_edge( i, j, false );
+                    M1.set_edge( i, j, false );
                     M0.restore_stored_row();
                     M1.restore_stored_row();
                 }

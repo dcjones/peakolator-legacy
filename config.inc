@@ -1,5 +1,5 @@
 
-BASE_FLAGS=-fPIC -Wall -g -O0
+BASE_FLAGS=-fPIC -Wall -g -O3
 
 CFLAGS=$(shell gsl-config --cflags) \
        $(shell python-config --cflags) \
