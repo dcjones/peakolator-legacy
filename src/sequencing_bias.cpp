@@ -123,8 +123,7 @@ void sequencing_bias::build( const char* ref_fn,
         exit(1);
     }
 
-    std::deque<sequence*> fg;
-    std::deque<sequence*> bg;
+    std::deque<sequence*> training_seqs;
 
 
     pos bg_offset;
@@ -178,7 +177,7 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
         }
 
-        fg.push_back( new sequence( local_seq ) );
+        training_seqs.push_back( new sequence( local_seq, 1 ) );
 
 
         /* add a background sequence */
@@ -198,25 +197,22 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
         }
 
-        bg.push_back( new sequence( local_seq ) );
+        training_seqs.push_back( new sequence( local_seq, 0 ) );
     }
 
 
     size_t max_k = 5;
-    M0 = new motif( L+1+R, max_k, &bg );
-    M1 = new motif( L+1+R, max_k, &fg );
+    M0 = new motif( L+1+R, max_k, 0 );
+    M1 = new motif( L+1+R, max_k, 1 );
 
-    train_motifs( *M0, *M1 );
+    train_motifs( *M0, *M1, &training_seqs );
 
 
     std::deque<sequence*>::iterator i_seq;
-    for( i_seq = fg.begin(); i_seq != fg.end(); i_seq++ ) {
+    for( i_seq = training_seqs.begin(); i_seq != training_seqs.end(); i_seq++ ) {
         delete *i_seq;
     }
 
-    for( i_seq = bg.begin(); i_seq != bg.end(); i_seq++ ) {
-        delete *i_seq;
-    }
 
 
     log_unindent();
@@ -287,7 +283,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
         L0 = M0->eval( *seq, i );
         L1 = M1->eval( *seq, i );
 
-        bias[i] = exp(L1 - L0);
+        bias[i] = L1 / L0;
         if( !gsl_finite(bias[i]) ) bias[i] = 1.0;
     }
 

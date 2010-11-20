@@ -72,7 +72,7 @@ class kmer_matrix
 class sequence
 {
     public:
-        sequence( const char* s );
+        sequence( const char* s, int meta = 0 );
         sequence( const sequence& );
         void operator=( const sequence& );
         ~sequence();
@@ -80,6 +80,7 @@ class sequence
         kmer get( size_t i ) const;
         bool get( const bool* indexes, size_t maxn, kmer& K, size_t offset = 0 ) const;
 
+        int meta;
 
     private:
         kmer* xs;
@@ -98,21 +99,25 @@ class sequence
 class motif
 {
     public:
-        motif( size_t n, size_t k, const std::deque<sequence*>* data );
+        motif( size_t n, size_t k, int meta );
         motif( const motif& );
         ~motif();
 
-        void add_edge( size_t i, size_t j );
-        void rem_edge( size_t i, size_t j );
+        void add_edge( size_t i, size_t j, const std::deque<sequence*>* data );
 
-        double eval( const sequence&, size_t offset = 0 );
+        double eval( const sequence&, size_t offset = 0 ) const;
+        double eval_node( size_t i, const std::deque<sequence*>* data,
+                          size_t offset = 0 ) const;
 
         size_t num_params() const;
 
         void store_row( size_t i );
         void restore_stored_row();
 
+        int meta;
+
     private:
+
         size_t num_parents( size_t i ) const;
         bool has_edge( size_t i, size_t j );
         void set_edge( size_t i, size_t j, bool );
@@ -121,17 +126,17 @@ class motif
         size_t k;
         kmer_matrix* P;
 
-        const std::deque<sequence*>* data;
         bool* parents;
 
         static const double pseudocount;
 
-        friend double motif_log_likelihood( motif& M0, motif& M1 );
-        friend void train_motifs( motif& M0, motif& M1 );
+
+        friend void train_motifs( motif& M0, motif& M1,
+                                  const std::deque<sequence*>* training_seqs );
 };
 
-
-void train_motifs( motif& M0, motif& M1 );
+void train_motifs( motif& M0, motif& M1,
+                   const std::deque<sequence*>* training_seqs );
                    
 
 

@@ -161,8 +161,8 @@ void kmer_matrix::restore_stored_row()
 const size_t sequence::kmer_max_k = 4*sizeof(kmer);
 
 
-sequence::sequence( const char* s )
-    : xs(NULL), n(0)
+sequence::sequence( const char* s, int meta )
+    : meta(meta), xs(NULL), n(0)
 {
     n = strlen(s);
     if( n > 0 ) {
@@ -181,7 +181,8 @@ sequence::sequence( const char* s )
 sequence::sequence( const sequence& s )
     : xs(NULL), n(0)
 {
-    n = s.n;
+    meta = s.meta;
+    n    = s.n;
     if( n > 0 ) {
         xs = new kmer[ n/kmer_max_k + 1 ];
         memcpy( xs, s.xs, (n/kmer_max_k + 1)*sizeof(kmer) );
@@ -192,7 +193,8 @@ sequence::sequence( const sequence& s )
 void sequence::operator=( const sequence& s )
 {
     delete[] xs;
-    n = s.n;
+    meta = s.meta;
+    n    = s.n;
     xs = new kmer[ n/kmer_max_k + 1 ];
     memcpy( xs, s.xs, (n/kmer_max_k + 1)*sizeof(kmer) );
 }
@@ -232,8 +234,8 @@ bool sequence::get( const bool* indexes, size_t maxn, kmer& K, size_t seq_offset
 
 const double motif::pseudocount = 1;
 
-motif::motif( size_t n, size_t k, const std::deque<sequence*>* data )
-    : n(n), k(k), data(data)
+motif::motif( size_t n, size_t k, int meta )
+    : meta(meta), n(n), k(k)
 {
     P = new kmer_matrix( n, k );
     P->setall( 1.0 );
@@ -246,9 +248,9 @@ motif::motif( size_t n, size_t k, const std::deque<sequence*>* data )
 motif::motif( const motif& M )
 {
     P = new kmer_matrix( *M.P );
+    meta = M.meta;
     n    = M.n;
     k    = M.k;
-    data = M.data;
 
     parents = new bool[n*n];
     memcpy( parents, M.parents, n*n*sizeof(bool) );
@@ -263,19 +265,19 @@ motif::~motif()
 }
 
 
-double motif::eval( const sequence& seq, size_t offset )
+double motif::eval( const sequence& seq, size_t offset ) const
 {
-    double l = 0.0; /* log likelihood */
+    double p = 1.0;
 
     const size_t n = P->n();
     size_t i;
     kmer K;
     for( i = 0; i < n; i++ ) {
         if( !seq.get( parents + i*n, n, K, offset ) ) continue;
-        l += log( P->get( i, K ) );
+        p *= P->get( i, K );
     }
 
-    return l;
+    return p;
 }
 
 
@@ -327,7 +329,7 @@ void motif::restore_stored_row()
 
 /* make an edge i --> j
  * That is, condition j on i. */
-void motif::add_edge( size_t i, size_t j )
+void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
     if( i > j ) {
         log_printf( LOG_ERROR, "Invalid motif edge (%zu, %zu)\n", i, j );
@@ -347,7 +349,9 @@ void motif::add_edge( size_t i, size_t j )
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
-        if( (*seq)->get( parents + j*n, n, K ) ) P->inc( j, K );
+        if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
+            P->inc( j, K );
+        }
     }
 
     P->dist_normalize_row( j );
@@ -355,23 +359,26 @@ void motif::add_edge( size_t i, size_t j )
 }
 
 
-double motif_log_likelihood( motif& M0, motif& M1 )
+
+
+
+double motif_log_likelihood( const motif& M0, const motif& M1,
+                             const std::deque<sequence*>* training_seqs )
 {
     double L, L0, L1;
 
     L = 0.0;
     
     std::deque<sequence*>::const_iterator i;
-    for( i = M0.data->begin(); i != M0.data->end(); i++ ) {
+    for( i = training_seqs->begin(); i != training_seqs->end(); i++ ) {
         L0 = M0.eval( **i );
         L1 = M1.eval( **i );
-        L += L0 - log( exp(L0) + exp(L1) );
-    }
-
-    for( i = M1.data->begin(); i != M1.data->end(); i++ ) {
-        L0 = M0.eval( **i );
-        L1 = M1.eval( **i );
-        L += L1 - log( exp(L0) + exp(L1) );
+        if( (*i)->meta == 0 ) {
+            L += log( L0 ) - log( L0 + L1 );
+        }
+        else if( (*i)->meta == 1 ) {
+            L += log( L1 ) - log( L0 + L1 );
+        }
     }
 
     return L;
@@ -397,7 +404,7 @@ double bic( double L, double n_obs, double n_params )
 double qaic( double L, double n_obs, double n_params )
 {
     /* this parameter set with trial and error */
-    const double c = 0.01;
+    const double c = 1.00;
 
     return c*L - n_params;
 }
@@ -405,7 +412,8 @@ double qaic( double L, double n_obs, double n_params )
 
 
 
-void train_motifs( motif& M0, motif& M1 )
+void train_motifs( motif& M0, motif& M1,
+                   const std::deque<sequence*>* training_seqs )
 {
 
     log_puts( LOG_MSG, "training motifs ...\n" );
@@ -421,12 +429,12 @@ void train_motifs( motif& M0, motif& M1 )
     double ic, ic_curr, ic_best;
     size_t j_best, i_best;
 
-    double n_obs    = M0.data->size() + M1.data->size();
+    double n_obs    = training_seqs->size();
     double n_params = M0.num_params() + M1.num_params();
 
     double L; /* log likelihood */
 
-    L = motif_log_likelihood( M0, M1 );
+    L = motif_log_likelihood( M0, M1, training_seqs );
     ic_curr = qaic( L, n_obs, n_params );
 
 
@@ -435,19 +443,20 @@ void train_motifs( motif& M0, motif& M1 )
 
 
 
-
+    /* XXX 'fake' training regimine XXX */
+#if 0
     for( j = 0; j < M0.n; j++ ) {
-        M0.add_edge( j, j );
-        M1.add_edge( j, j );
+        M0.add_edge( j, j, D0 );
+        M1.add_edge( j, j, D1 );
     }
 
-    L = motif_log_likelihood( M0, M1 );
+    L = motif_log_likelihood( M0, M1, D0, D1 );
     ic_curr = qaic( L, n_obs, n_params );
 
     log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
 
     return;
-
+#endif
 
 
 
@@ -460,69 +469,39 @@ void train_motifs( motif& M0, motif& M1 )
 
         for( j = 0; j < M0.n; j++ ) {
 
+            for( i = M0.has_edge( j, j ) ? 0 : j; i <= j; i++ ) {
+                if( M0.has_edge( i, j ) ) {
+                    log_printf( LOG_MSG, "edge (%zu, %zu): edge exists\n", i, j );
+                    continue;
+                }
 
-            /* position j is not currently included in the model */
-            if( !M0.has_edge( j, j ) ) {
+                if( M0.num_parents(j) >= M0.k ) {
+                    log_printf( LOG_MSG, "edge (%zu, %zu): %zu already has %zu parents\n",
+                                i, j, j, M0.num_parents(j) );
+                    continue;
+                }
+
                 M0.store_row(j);
                 M1.store_row(j);
-                M0.add_edge( j, j );
-                M1.add_edge( j, j );
+                M0.add_edge( i, j, training_seqs );
+                M1.add_edge( i, j, training_seqs );
 
-                L        = motif_log_likelihood( M0, M1 );
+                L        = motif_log_likelihood( M0, M1, training_seqs );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = qaic( L, n_obs, n_params );
                 log_printf( LOG_MSG, "edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
-                                      j, j, L, n_params, ic );
-
+                                      i, j, L, n_params, ic );
 
                 if( ic > ic_best ) {
                     ic_best = ic;
-                    i_best = j;
+                    i_best = i;
                     j_best = j;
                 }
         
-                M0.set_edge( j, j, false );
-                M1.set_edge( j, j, false );
+                M0.set_edge( i, j, false );
+                M1.set_edge( i, j, false );
                 M0.restore_stored_row();
                 M1.restore_stored_row();
-
-            }
-            /* position j is included in the model */
-            else {
-                for( i = 0; i < j; i++ ) {
-                    if( M0.has_edge( i, j ) ) {
-                        log_printf( LOG_MSG, "edge (%zu, %zu): edge exists\n", i, j );
-                        continue;
-                    }
-
-                    if( M0.num_parents(j) >= M0.k ) {
-                        log_printf( LOG_MSG, "edge (%zu, %zu): %zu already has %zu parents\n",
-                                    i, j, j, M0.num_parents(j) );
-                        continue;
-                    }
-
-                    M0.store_row(j);
-                    M1.store_row(j);
-                    M0.add_edge( i, j );
-                    M1.add_edge( i, j );
-
-                    L        = motif_log_likelihood( M0, M1 );
-                    n_params = M0.num_params() + M1.num_params();
-                    ic       = qaic( L, n_obs, n_params );
-                    log_printf( LOG_MSG, "edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
-                                          i, j, L, n_params, ic );
-
-                    if( ic > ic_best ) {
-                        ic_best = ic;
-                        i_best = i;
-                        j_best = j;
-                    }
-            
-                    M0.set_edge( i, j, false );
-                    M1.set_edge( i, j, false );
-                    M0.restore_stored_row();
-                    M1.restore_stored_row();
-                }
             }
         }
 
@@ -532,8 +511,8 @@ void train_motifs( motif& M0, motif& M1 )
         if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
 
         ic_curr = ic_best;
-        M0.add_edge( i_best, j_best );
-        M1.add_edge( i_best, j_best );
+        M0.add_edge( i_best, j_best, training_seqs );
+        M1.add_edge( i_best, j_best, training_seqs );
 
         log_unindent();
     }
