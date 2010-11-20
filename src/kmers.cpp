@@ -111,24 +111,27 @@ void kmer_matrix::dist_normalize_row( size_t i )
 }
 
 
-void kmer_matrix::dist_conditionalize()
+void kmer_matrix::dist_conditionalize( int effective_k )
 {
     size_t i;
 
     for( i = 0; i < A->size1; i++ ) {
-        dist_conditionalize_row( i );
+        dist_conditionalize_row( i, effective_k );
     }
 }
 
 
-void kmer_matrix::dist_conditionalize_row( size_t i )
+void kmer_matrix::dist_conditionalize_row( size_t i, int effective_k  )
 {
+    if( effective_k <= 0 ) effective_k = A->size2;
+
     kmer L;
+    kmer L_max = 1 << (2*(effective_k-1));
     kmer K;
     kmer nt;
     double z;
 
-    for( L = 0; L < A->size2/4; L++ ) {
+    for( L = 0; L < L_max; L++ ) {
         K = L<<2;
         z = 0.0;
         for( nt = 0; nt < 4; nt++ ) {
@@ -166,10 +169,11 @@ sequence::sequence( const char* s )
         xs = new kmer[ n/kmer_max_k + 1 ];
         memset( xs, 0, (n/kmer_max_k + 1)*sizeof(kmer) );
 
-        size_t i,j;
+        size_t i, block, offset;
         for( i = 0; i < n; i++ ) {
-            j = i / kmer_max_k;
-            xs[j] = (xs[j] << 2) | nt2num( s[i] );
+            block  = i / kmer_max_k;
+            offset = i % kmer_max_k;
+            xs[block] = xs[block] | (nt2num(s[i]) << (2*offset));
         }
     }
 }
@@ -201,26 +205,25 @@ sequence::~sequence()
 
 kmer sequence::get( size_t i ) const
 {
-    size_t j = i / (sizeof(kmer)/2);
-    size_t l = i % (sizeof(kmer)/2);
-    return (xs[j] >> l) & 0x3;
+    size_t block  = i / kmer_max_k;
+    size_t offset = i % kmer_max_k;
+    return (xs[block] >> (2*offset)) & 0x3;
 }
 
 
-bool sequence::get( const bool* indexes, size_t maxn, kmer& K, size_t offset ) const
+bool sequence::get( const bool* indexes, size_t maxn, kmer& K, size_t seq_offset ) const
 {
     bool nonempty = false;
-    size_t j, l;
+    size_t block, offset;
     K = 0;
     size_t i;
     for( i = 0; i < maxn; i++ ) {
         if( indexes[i] ) {
             nonempty = true;
-            j = (i+offset) / kmer_max_k;
-            l = (i+offset) % kmer_max_k;
-            K = (K<<2) | ((xs[j] >> l) & 0x3);
+            block  = (i+seq_offset) / kmer_max_k;
+            offset = (i+seq_offset) % kmer_max_k;
+            K = (K<<2) | ((xs[block] >> (2*offset)) & 0x3);
         }
-        i++;
     }
 
     return nonempty;
@@ -334,7 +337,8 @@ void motif::add_edge( size_t i, size_t j )
     set_edge( i, j, true );
 
     P->setrow( j, 0.0 );
-    size_t m = 1 << (2*num_parents(j));
+    size_t n_parents = num_parents(j);
+    size_t m = 1 << (2*n_parents);
     kmer K;
     for( K = 0; K < m; K++ ) {
         P->set( j, K, pseudocount );
@@ -343,11 +347,11 @@ void motif::add_edge( size_t i, size_t j )
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
-        P->inc( j, (*seq)->get( parents[j*n] ) );
+        if( (*seq)->get( parents + j*n, n, K ) ) P->inc( j, K );
     }
 
     P->dist_normalize_row( j );
-    P->dist_conditionalize_row( j );
+    P->dist_conditionalize_row( j, n_parents );
 }
 
 
@@ -393,7 +397,7 @@ double bic( double L, double n_obs, double n_params )
 double qaic( double L, double n_obs, double n_params )
 {
     /* this parameter set with trial and error */
-    const double c = 0.5;
+    const double c = 0.01;
 
     return c*L - n_params;
 }
@@ -403,6 +407,7 @@ double qaic( double L, double n_obs, double n_params )
 
 void train_motifs( motif& M0, motif& M1 )
 {
+
     log_puts( LOG_MSG, "training motifs ...\n" );
     log_indent();
 
@@ -411,8 +416,8 @@ void train_motifs( motif& M0, motif& M1 )
         exit(1);
     }
 
-    size_t i, j;
 
+    size_t i, j;
     double ic, ic_curr, ic_best;
     size_t j_best, i_best;
 
@@ -426,6 +431,25 @@ void train_motifs( motif& M0, motif& M1 )
 
 
     log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
+
+
+
+
+
+    for( j = 0; j < M0.n; j++ ) {
+        M0.add_edge( j, j );
+        M1.add_edge( j, j );
+    }
+
+    L = motif_log_likelihood( M0, M1 );
+    ic_curr = qaic( L, n_obs, n_params );
+
+    log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
+
+    return;
+
+
+
 
     while( true ) {
         ic_best = GSL_NEGINF;

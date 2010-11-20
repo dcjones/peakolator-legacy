@@ -284,16 +284,15 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
     double L0, L1;
 
     for( i = 0; i < seqlen; i++ ) {
-        L0 = M0->eval( *seq, L+i );
-        L1 = M0->eval( *seq, L+i );
+        L0 = M0->eval( *seq, i );
+        L1 = M1->eval( *seq, i );
 
-        bias[i] = L1 / L0;
+        bias[i] = exp(L1 - L0);
         if( !gsl_finite(bias[i]) ) bias[i] = 1.0;
     }
 
+    free(seqstr);
     delete seq;
-    free(bias);
-
     return bias;
 }
 
