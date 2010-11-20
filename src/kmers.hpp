@@ -122,6 +122,10 @@ class motif
         bool has_edge( size_t i, size_t j );
         void set_edge( size_t i, size_t j, bool );
 
+
+        void update_likelihood_column( gsl_matrix* L, size_t j,
+                                       const std::deque<sequence*>* training_seqs );
+
         size_t n;
         size_t k;
         kmer_matrix* P;

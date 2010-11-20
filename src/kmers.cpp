@@ -5,6 +5,8 @@
 
 #include <string.h>
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_sf_log.h>
+#include <gsl/gsl_sf_exp.h>
 
 
 kmer_matrix::kmer_matrix( size_t n, size_t k )
@@ -385,6 +387,89 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
 }
 
 
+
+
+/* Given two matrices L0, L1, where Lk[i,j] gives the likelihood of sequence i,
+ * under node j of model k, return the log posterior probability of the entire
+ * model (under a flat prior).
+ */
+double eval_likelihood_matrices( const gsl_matrix* L0, const gsl_matrix* L1,
+                                 const gsl_vector* meta0, const gsl_vector* meta1,
+                                 gsl_vector* l0, gsl_vector* l1, gsl_vector* lz )
+{
+
+    if( L0->size1 != L1->size1 || L0->size2 != L1->size2 ) {
+        log_printf( LOG_ERROR, "Mismatching likelihood matrices.\n" );
+        exit(1);
+    }
+
+    double l;
+    const size_t n = L0->size1;
+    const size_t m = L0->size2;
+    size_t i, j;
+
+
+    /* sum columns to get the log likelihood of each sequence under each model
+     * */
+
+    gsl_vector_set_zero( l0 );
+    gsl_vector_set_zero( l1 );
+
+    for( j = 0; j < m; j++ ) {
+        gsl_vector_add( l0, &gsl_matrix_const_column( L0, j ).vector );
+        gsl_vector_add( l1, &gsl_matrix_const_column( L1, j ).vector );
+    }
+
+
+    /* compute normalizing quotients */
+    for( i = 0; i < n; i++) {
+        gsl_vector_set( lz, i,
+                        gsl_sf_log( gsl_sf_exp(gsl_vector_get( l0, i ))
+                                  + gsl_sf_exp(gsl_vector_get( l1, i )) ) );
+    }
+
+
+    /* compute overall log-liklelihood */
+    gsl_vector_sub( l0, lz );
+    gsl_vector_sub( l1, lz );
+
+    gsl_vector_mul( l0, meta0 );
+    gsl_vector_mul( l1, meta1 );
+
+
+    l = 0.0;
+    gsl_vector_add( l0, l1 );
+    for( i = 0; i < n; i++ ) {
+        l += gsl_vector_get( l0, i );
+    }
+
+
+    return l;
+}
+
+
+
+void motif::update_likelihood_column( gsl_matrix* L, size_t j,
+                                      const std::deque<sequence*>* training_seqs )
+{
+    size_t i;
+    const size_t n = L->size1;
+    const size_t m = L->size2;
+    kmer K;
+
+    gsl_vector_set_zero( &gsl_matrix_column( L, j ).vector );
+
+    for( i = 0; i < n; i++ ) {
+        if( (*training_seqs)[i]->get( parents + j*m, m, K ) ) {
+            gsl_matrix_set( L, i, j, gsl_sf_log( P->get( j, K ) ) );
+        }
+    }
+}
+
+
+
+
+
 /* various information criterion to try */
 
 /* Akaike Information Criterion */
@@ -426,19 +511,55 @@ void train_motifs( motif& M0, motif& M1,
 
 
     size_t i, j;
+
+    /* likelihood matrices and various work matrices needed */
+    gsl_matrix* L0 = gsl_matrix_calloc( training_seqs->size(), M0.n );
+    gsl_matrix* L1 = gsl_matrix_calloc( training_seqs->size(), M0.n );
+
+
+    /* 0-1 vectors giving labeling each sequence as foreground or background */
+    gsl_vector* meta0 = gsl_vector_calloc( training_seqs->size() );
+    gsl_vector* meta1 = gsl_vector_calloc( training_seqs->size() );
+
+    for( i = 0; i < training_seqs->size(); i++ ) {
+        if( (*training_seqs)[i]->meta == 0 ) {
+            gsl_vector_set( meta0, i, 1.0 );
+        }
+        else if( (*training_seqs)[i]->meta == 1 ) {
+            gsl_vector_set( meta1, i, 1.0 );
+        }
+    }
+
+    /* work vectors */
+    gsl_vector* l0 = gsl_vector_alloc( training_seqs->size() );
+    gsl_vector* l1 = gsl_vector_alloc( training_seqs->size() );
+    gsl_vector* lz = gsl_vector_alloc( training_seqs->size() );
+
+
+    /* backup columns, to restore state after trying a new edge */
+    gsl_vector* c0 = gsl_vector_alloc( training_seqs->size() );
+    gsl_vector* c1 = gsl_vector_alloc( training_seqs->size() );
+    
+
+
+    /* keeping track of the optimal edge */
     double ic, ic_curr, ic_best;
     size_t j_best, i_best;
 
+    /* parameters to compute information criterion */
     double n_obs    = training_seqs->size();
     double n_params = M0.num_params() + M1.num_params();
 
-    double L; /* log likelihood */
 
-    L = motif_log_likelihood( M0, M1, training_seqs );
-    ic_curr = qaic( L, n_obs, n_params );
+    /* log posterier probability */
+    double l; 
 
 
-    log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
+    /* baseline ic */
+    l = eval_likelihood_matrices( L0, L1, meta0, meta1, l0, l1, lz );
+    ic_curr = qaic( l, n_obs, n_params );
+
+    log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
 
 
 
@@ -481,16 +602,28 @@ void train_motifs( motif& M0, motif& M1,
                     continue;
                 }
 
+                /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
                 M1.store_row(j);
+
+                /* keep track of the old likelihoods to avoid reevaluating */
+                gsl_matrix_get_col( c0, L0, j );
+                gsl_matrix_get_col( c1, L1, j );
+
+                /* add edge */
                 M0.add_edge( i, j, training_seqs );
                 M1.add_edge( i, j, training_seqs );
 
-                L        = motif_log_likelihood( M0, M1, training_seqs );
+                /* evaluate likelihoods for that column */
+                M0.update_likelihood_column( L0, j, training_seqs );
+                M1.update_likelihood_column( L1, j, training_seqs );
+
+
+                l        = eval_likelihood_matrices( L0, L1, meta0, meta1, l0, l1, lz );
                 n_params = M0.num_params() + M1.num_params();
-                ic       = qaic( L, n_obs, n_params );
-                log_printf( LOG_MSG, "edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
-                                      i, j, L, n_params, ic );
+                ic       = qaic( l, n_obs, n_params );
+                log_printf( LOG_MSG, "edge (%zu, %zu): l = %0.4e, k = %0.0e, ic = %0.4e\n",
+                                      i, j, l, n_params, ic );
 
                 if( ic > ic_best ) {
                     ic_best = ic;
@@ -498,24 +631,49 @@ void train_motifs( motif& M0, motif& M1,
                     j_best = j;
                 }
         
+
+                /* remove edge */
                 M0.set_edge( i, j, false );
                 M1.set_edge( i, j, false );
+
+                /* restore previous parameters */
                 M0.restore_stored_row();
                 M1.restore_stored_row();
+
+                /* restore previous likelihoods */
+                gsl_matrix_set_col( L0, j, c0 );
+                gsl_matrix_set_col( L1, j, c1 );
             }
         }
 
-        log_printf( LOG_MSG, "best edge (%zu, %zu): L = %0.4e, k = %0.0e, ic = %0.4e\n",
-                              i_best, j_best, L, n_params, ic_best );
+        log_printf( LOG_MSG, "best edge (%zu, %zu): ic = %0.4e\n",
+                              i_best, j_best, ic_best );
 
         if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
 
         ic_curr = ic_best;
+
         M0.add_edge( i_best, j_best, training_seqs );
         M1.add_edge( i_best, j_best, training_seqs );
 
+        M0.update_likelihood_column( L0, j_best, training_seqs );
+        M1.update_likelihood_column( L1, j_best, training_seqs );
+
         log_unindent();
     }
+
+
+
+    gsl_matrix_free( L0 );
+    gsl_matrix_free( L1 );
+    gsl_vector_free( meta0 );
+    gsl_vector_free( meta1 );
+    gsl_vector_free( l0 );
+    gsl_vector_free( l1 );
+    gsl_vector_free( lz );
+    gsl_vector_free( c0 );
+    gsl_vector_free( c1 );
+
 
     log_unindent();
     log_puts( LOG_MSG, "done.\n" );
