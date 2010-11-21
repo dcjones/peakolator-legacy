@@ -8,6 +8,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_sf_exp.h>
 #include "samtools/faidx.h"
 
 #include <algorithm>
@@ -283,7 +284,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
         L0 = M0->eval( *seq, i );
         L1 = M1->eval( *seq, i );
 
-        bias[i] = L1 / L0;
+        bias[i] = gsl_sf_exp( L1 - L0 );
         if( !gsl_finite(bias[i]) ) bias[i] = 1.0;
     }
 

@@ -47,6 +47,7 @@ class kmer_matrix
 
         void dist_conditionalize( int effective_k = -1 );
         void dist_conditionalize_row( size_t i, int effective_k = -1 );
+        void log_transform_row( size_t i, int effective_k = -1 );
 
         /* allows one row to be stored then reset, which is used when searching
          * for the optimal edge to add when training the model */

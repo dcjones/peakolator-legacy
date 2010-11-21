@@ -147,6 +147,18 @@ void kmer_matrix::dist_conditionalize_row( size_t i, int effective_k  )
 }
 
 
+void kmer_matrix::log_transform_row( size_t i, int effective_k )
+{
+    if( effective_k <= 0 ) effective_k = A->size2;
+    size_t j_max = 1 << (2*effective_k);
+
+    size_t j;
+    for( j = 0; j < j_max; j++ ) {
+        set( i, j, gsl_sf_log( get( i, j ) ) );
+    }
+}
+
+
 void kmer_matrix::store_row( size_t i )
 {
     gsl_matrix_get_row( stored_row, A, i );
@@ -240,7 +252,7 @@ motif::motif( size_t n, size_t k, int meta )
     : meta(meta), n(n), k(k)
 {
     P = new kmer_matrix( n, k );
-    P->setall( 1.0 );
+    P->setall( 0.0 );
 
     parents = new bool[n*n];
     memset( parents, 0, n*n*sizeof(bool) );
@@ -269,14 +281,14 @@ motif::~motif()
 
 double motif::eval( const sequence& seq, size_t offset ) const
 {
-    double p = 1.0;
+    double p = 0.0;
 
     const size_t n = P->n();
     size_t i;
     kmer K;
     for( i = 0; i < n; i++ ) {
         if( !seq.get( parents + i*n, n, K, offset ) ) continue;
-        p *= P->get( i, K );
+        p += P->get( i, K );
     }
 
     return p;
@@ -358,6 +370,7 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 
     P->dist_normalize_row( j );
     P->dist_conditionalize_row( j, n_parents );
+    P->log_transform_row( j, n_parents );
 }
 
 
@@ -376,10 +389,10 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
         L0 = M0.eval( **i );
         L1 = M1.eval( **i );
         if( (*i)->meta == 0 ) {
-            L += log( L0 ) - log( L0 + L1 );
+            L += L0 - logaddexp( L0, L1 );
         }
         else if( (*i)->meta == 1 ) {
-            L += log( L1 ) - log( L0 + L1 );
+            L += L1 - logaddexp( L0, L1 );
         }
     }
 
@@ -424,8 +437,8 @@ double eval_likelihood_matrices( const gsl_matrix* L0, const gsl_matrix* L1,
     /* compute normalizing quotients */
     for( i = 0; i < n; i++) {
         gsl_vector_set( lz, i,
-                        gsl_sf_log( gsl_sf_exp(gsl_vector_get( l0, i ))
-                                  + gsl_sf_exp(gsl_vector_get( l1, i )) ) );
+                        logaddexp( gsl_vector_get( l0, i ),
+                                   gsl_vector_get( l1, i ) ) );
     }
 
 
@@ -457,11 +470,11 @@ void motif::update_likelihood_column( gsl_matrix* L, size_t j,
     const size_t m = L->size2;
     kmer K;
 
-    gsl_vector_set_zero( &gsl_matrix_column( L, j ).vector );
+    gsl_vector_set_all( &gsl_matrix_column( L, j ).vector, 0.0 );
 
     for( i = 0; i < n; i++ ) {
         if( (*training_seqs)[i]->get( parents + j*m, m, K ) ) {
-            gsl_matrix_set( L, i, j, gsl_sf_log( P->get( j, K ) ) );
+            gsl_matrix_set( L, i, j, P->get( j, K ) );
         }
     }
 }
