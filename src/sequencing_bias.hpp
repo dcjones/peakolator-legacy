@@ -21,6 +21,8 @@ class sequencing_bias
 
         double* get_bias( const char* seqname, pos start, pos end, int strand );
 
+        char* print_model_graph();
+
         sequencing_bias* copy() const;
         void clear();
 

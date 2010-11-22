@@ -203,10 +203,11 @@ void sequencing_bias::build( const char* ref_fn,
 
 
     size_t max_k = 5;
+    size_t max_dep_dist = 5;
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
-    train_motifs( *M0, *M1, &training_seqs );
+    train_motifs( *M0, *M1, &training_seqs, max_dep_dist );
 
 
     std::deque<sequence*>::iterator i_seq;
@@ -249,6 +250,8 @@ void sequencing_bias::hash_reads( table* T, samfile_t* reads_f, size_t limit ) c
     }
 
     bam_destroy1(read);
+
+    log_puts( LOG_MSG, "done.\n" );
 }
 
 
@@ -291,5 +294,11 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
     free(seqstr);
     delete seq;
     return bias;
+}
+
+
+char* sequencing_bias::print_model_graph()
+{
+    return M0->print_model_graph( L );
 }
 

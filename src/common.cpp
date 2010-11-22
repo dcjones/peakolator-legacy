@@ -2,8 +2,6 @@
 #include "common.hpp"
 #include "logger.h"
 #include <boost/math/bindings/mpfr.hpp>
-#include <gsl/gsl_sf_log.h>
-#include <gsl/gsl_sf_exp.h>
 
 
 /* this controls the mantissa precision, the exponent precision is fixed at the
@@ -162,10 +160,10 @@ double logaddexp( double x, double y )
 {
     double u = x - y;
     if( u > 0.0 ) {
-        return x + gsl_sf_log_1plusx( gsl_sf_exp( -u ) );
+        return x + log1p( exp( -u ) );
     }
     else if( u <= 0.0 ) {
-        return y + gsl_sf_log_1plusx( gsl_sf_exp( u ) );
+        return y + log1p( exp( u ) );
     }
     else {
         return x + y;

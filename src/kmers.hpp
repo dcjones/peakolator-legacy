@@ -114,6 +114,7 @@ class motif
 
         void store_row( size_t i );
         void restore_stored_row();
+        char* print_model_graph( int offset = 0 );
 
         int meta;
 
@@ -137,11 +138,13 @@ class motif
 
 
         friend void train_motifs( motif& M0, motif& M1,
-                                  const std::deque<sequence*>* training_seqs );
+                                  const std::deque<sequence*>* training_seqs,
+                                  size_t max_dep_dist );
 };
 
 void train_motifs( motif& M0, motif& M1,
-                   const std::deque<sequence*>* training_seqs );
+                   const std::deque<sequence*>* training_seqs,
+                   size_t max_dep_dist = 0 );
                    
 
 

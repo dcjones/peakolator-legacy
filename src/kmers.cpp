@@ -3,10 +3,9 @@
 #include "common.hpp"
 #include "logger.h"
 
-#include <string.h>
+#include <string>
+#include <cstring>
 #include <gsl/gsl_math.h>
-#include <gsl/gsl_sf_log.h>
-#include <gsl/gsl_sf_exp.h>
 
 
 kmer_matrix::kmer_matrix( size_t n, size_t k )
@@ -154,7 +153,7 @@ void kmer_matrix::log_transform_row( size_t i, int effective_k )
 
     size_t j;
     for( j = 0; j < j_max; j++ ) {
-        set( i, j, gsl_sf_log( get( i, j ) ) );
+        set( i, j, log( get( i, j ) ) );
     }
 }
 
@@ -340,6 +339,46 @@ void motif::restore_stored_row()
 }
 
 
+char* motif::print_model_graph( int offset )
+{
+    std::string graph_str;
+    char* tmp;
+    int r;
+
+    graph_str += "digraph {\n";
+    graph_str += "splines=\"true\";\n";
+    graph_str += "node [shape=\"box\"];\n";
+
+    int i, j;
+    for( j = 0; j < (int)n; j++ ) {
+        r = asprintf( &tmp, "n%d [label=\"%d\",pos=\"%d,0\",style=\"%s\"];\n",
+                            j, j - offset, j*100,
+                            parents[j*n+j] ? "solid" : "dotted" 
+                            );
+        graph_str += tmp;
+        free(tmp);
+    }
+
+
+    for( j = 0; j < (int)n; j++ ) {
+        if( !parents[j*n+j] ) continue;
+
+        for( i = 0; i < j; i++ ) {
+            if( parents[j*n+i] ) {
+                r = asprintf( &tmp, "n%d -> n%d;\n", i, j );
+                graph_str += tmp;
+                free(tmp);
+            }
+
+        }
+
+    }
+
+    graph_str += "}\n";
+    return strdup(graph_str.c_str());
+}
+
+
 
 /* make an edge i --> j
  * That is, condition j on i. */
@@ -489,7 +528,8 @@ double qaic( double L, double n_obs, double n_params )
 
 
 void train_motifs( motif& M0, motif& M1,
-                   const std::deque<sequence*>* training_seqs )
+                   const std::deque<sequence*>* training_seqs,
+                   size_t max_dep_dist )
 {
 
     log_puts( LOG_MSG, "training motifs ...\n" );
@@ -502,6 +542,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
     size_t i, j;
+    size_t i_start;
 
     /* likelihood matrices: 
      * Lk_ij gives the likelihood of training example i on node j in model k.
@@ -561,24 +602,6 @@ void train_motifs( motif& M0, motif& M1,
 
 
 
-
-    /* XXX 'fake' training regimine XXX */
-#if 0
-    for( j = 0; j < M0.n; j++ ) {
-        M0.add_edge( j, j, D0 );
-        M1.add_edge( j, j, D1 );
-    }
-
-    L = motif_log_likelihood( M0, M1, D0, D1 );
-    ic_curr = qaic( L, n_obs, n_params );
-
-    log_printf( LOG_MSG, "L = %e, k = %0.0e, ic = %0.4e\n", L, n_params, ic_curr );
-
-    return;
-#endif
-
-
-
     while( true ) {
         ic_best = GSL_NEGINF;
         j_best = i_best = 0;
@@ -588,7 +611,14 @@ void train_motifs( motif& M0, motif& M1,
 
         for( j = 0; j < M0.n; j++ ) {
 
-            for( i = M0.has_edge( j, j ) ? 0 : j; i <= j; i++ ) {
+            if( M0.has_edge( j, j ) ) {
+                if( max_dep_dist == 0 || j <= max_dep_dist ) i_start = 0;
+                else i_start = i - max_dep_dist;
+            }
+            else i_start = j;
+
+
+            for( i = i_start; i <= j; i++ ) {
                 if( M0.has_edge( i, j ) ) {
                     log_printf( LOG_MSG, "edge (%zu, %zu): edge exists\n", i, j );
                     continue;

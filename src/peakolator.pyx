@@ -60,6 +60,7 @@ cdef extern from "annotations.hpp":
 cdef extern from "sequencing_bias.hpp":
     ctypedef struct c_sequencing_bias "sequencing_bias":
         double* get_bias( char* seqname, pos start, pos end, int strand )
+        char* print_model_graph()
         pass
 
 
@@ -314,6 +315,19 @@ cdef class dataset:
             ws[i] = c_ws[i]
 
         return ws
+
+    def print_model_graph( self ):
+
+        cdef char* graph_cstr
+
+        graph_cstr = self.cthis.bias.print_model_graph()
+        graph_str = str(graph_cstr)
+
+        free(<void*>graph_cstr)
+
+        return graph_str
+
+
 
 
     def __dealloc__( self ):
