@@ -133,9 +133,6 @@ option_list = [
     optparse.make_option( '-R', dest='R', action='store',
                           default=10, metavar='N', type='int',
                           help='consider bios up to N nucleotides to the right of the read' ),
-    optparse.make_option( '-k', dest='k', action='store',
-                          default=5, metavar='N', type='int',
-                          help='bias correction should use N-order estimation of sequence probabilities' ),
     optparse.make_option( '--skip-intergenic', dest='scan_intergenic',
                           action='store_false', default=True,
                           help='do not scan intergenic regions' ),
@@ -285,7 +282,7 @@ def print_bed( f, rows ):
     for row in rows:
         if row.strand == 0:
             strand = '+'
-        elif row.strand = 1:
+        elif row.strand == 1:
             strand = '-'
         else:
             strand = '.'
@@ -796,7 +793,7 @@ def main():
 
 
     # load read data, assess sequencing bias
-    data = peakolator.dataset( options.ref_fn, reads_fn, options.L, options.R, options.k )
+    data = peakolator.dataset( options.ref_fn, reads_fn, 100000, options.L, options.R, 1.0 )
 
     # train background model
     d_train = 1000
