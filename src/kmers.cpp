@@ -503,33 +503,29 @@ void motif::update_likelihood_column( gsl_matrix* L, size_t j,
 /* various information criterion to try */
 
 /* Akaike Information Criterion */
-double aic( double L, double n_obs, double n_params )
+double aic( double L, double n_obs, double n_params, double c = 1.0 )
 {
-    return L - n_params;
+    return L - c*n_params*n_obs / (n_obs - n_params - 1.0);
 }
 
-/* Bayesian Information Criterion */
-double bic( double L, double n_obs, double n_params )
+/* Bayesian (Schwarz) Information Criterion */
+double bic( double L, double n_obs, double n_params, double c = 1.0 )
 {
-    return L - (n_params/2.0) * log(n_obs);
+    return 2.0*L - c*n_params*log(n_obs);
 }
 
 
-/* Quasi-AIC */
-double qaic( double L, double n_obs, double n_params )
+/* Hannan-Quinn Information Criterion */
+double hqic( double L, double n_obs, double n_params, double c = 1.0 )
 {
-    /* this parameter set with trial and error */
-    const double c = 1.00;
-
-    return c*L - n_params;
+    return L - c*n_params*log(log(n_obs));
 }
-
 
 
 
 void train_motifs( motif& M0, motif& M1,
                    const std::deque<sequence*>* training_seqs,
-                   size_t max_dep_dist )
+                   size_t max_dep_dist, double complexity_penalty )
 {
 
     log_puts( LOG_MSG, "training motifs ...\n" );
@@ -539,6 +535,8 @@ void train_motifs( motif& M0, motif& M1,
         log_printf( LOG_ERROR, "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
         exit(1);
     }
+
+    double (*compute_ic)( double, double, double, double ) = aic;
 
 
     size_t i, j;
@@ -596,7 +594,7 @@ void train_motifs( motif& M0, motif& M1,
 
     /* baseline ic */
     l = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
-    ic_curr = qaic( l, n_obs, n_params );
+    ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
     log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
 
@@ -656,7 +654,7 @@ void train_motifs( motif& M0, motif& M1,
 
                 l        = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
                 n_params = M0.num_params() + M1.num_params();
-                ic       = qaic( l, n_obs, n_params );
+                ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
                 log_printf( LOG_MSG, "edge (%zu, %zu): l = %0.4e, k = %0.0e, ic = %0.4e\n",
                                       i, j, l, n_params, ic );
 

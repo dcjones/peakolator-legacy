@@ -12,7 +12,8 @@ class dataset
 {
     public:
         dataset( const char* fasta_fn, const char* bam_fn,
-                 size_t bias_n, pos bias_L, pos bias_R );
+                 size_t bias_n, pos bias_L, pos bias_R,
+                 double bias_complexity_penalty = 1.0 );
 
         dataset* copy() const;
 

@@ -101,7 +101,8 @@ cdef extern from "dataset.hpp":
 
     c_dataset* new_dataset "new dataset" ( \
             char* fasta_fn, char* bam_fn, \
-            size_t bias_n, pos bias_L, pos bias_R )
+            size_t bias_n, pos bias_L, pos bias_R,
+            double bias_complexity_penalty )
 
     void del_dataset "delete" ( c_dataset* dataset )
 
@@ -289,16 +290,22 @@ cdef class dataset:
         cdef char* fasta_fn_cstr    = NULL
         cdef char* training_seqname = NULL
         cdef size_t bias_n = 0
+        cdef double bias_complexity_penalty = 1.0
 
-        if len(args) == 5:
-            (fasta_fn,bam_fn,bias_n,bias_L,bias_R) = args[:6]
+        if len(args) >= 5:
+            (fasta_fn,bam_fn,bias_n,bias_L,bias_R) = args[:5]
 
             if fasta_fn is not None:
                 fasta_fn_cstr = fasta_fn
 
+            if len(args) > 5:
+                complexity_penalty = float(args[5])
+
             self.cthis = new_dataset(
                             fasta_fn_cstr, bam_fn, \
-                            bias_n, bias_L, bias_R )
+                            bias_n, bias_L, bias_R,
+                            complexity_penalty )
+
         elif len(args) == 1:
             self.cthis = (<dataset>args[0]).cthis.copy()
         else:

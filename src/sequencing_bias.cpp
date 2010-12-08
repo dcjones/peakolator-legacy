@@ -31,12 +31,13 @@ sequencing_bias::sequencing_bias()
 
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
-                                  size_t n, pos L, pos R )
+                                  size_t n, pos L, pos R,
+                                  double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, reads_fn, n, L, R );
+    build( ref_fn, reads_fn, n, L, R, complexity_penalty );
 }
 
 sequencing_bias* sequencing_bias::copy() const
@@ -82,7 +83,8 @@ void sequencing_bias::clear()
 
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
-                             size_t n, pos L, pos R )
+                             size_t n, pos L, pos R,
+                             double complexity_penalty )
 {
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
     log_indent();
@@ -105,6 +107,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     table T;
     hash_reads( &T, reads_f, n );
+    n = T.m;
 
     /* resort the remaining (1-q)*n by position */
     log_puts( LOG_MSG, "sorting by position ... " );
@@ -127,7 +130,12 @@ void sequencing_bias::build( const char* ref_fn,
     std::deque<sequence*> training_seqs;
 
 
+
+    const int bg_count = 1; /* sample this many background sequence for each foreground sequence */
+    int j;
+    pos bg_pos;
     pos bg_offset;
+
     char*          seqname   = NULL;
     int            seqlen    = 0;
     int            curr_tid  = -1;
@@ -183,22 +191,24 @@ void sequencing_bias::build( const char* ref_fn,
 
         /* add a background sequence */
         /* adjust the current read position randomly, and sample */
-        bg_offset = (pos)gsl_ran_flat( rng, 50.0, 100.0 );
-        if( gsl_ran_flat( rng, -1.0, 1.0 ) < 0.0 ) bg_offset = -bg_offset;
+        for( j = 0; j < bg_count; j++ ) {
+            bg_offset = (pos)gsl_ran_flat( rng, 100.0, 200.0 );
+            if( gsl_ran_flat( rng, -1.0, 1.0 ) < 0.0 ) bg_offset = -bg_offset;
 
-        S[i]->pos.pos += bg_offset;
+            bg_pos = S[i]->pos.pos + bg_offset;
 
-        if( S[i]->pos.strand ) {
-            if( S[i]->pos.pos < R ) continue;
-            memcpy( local_seq, seq + S[i]->pos.pos - R, (L+1+R)*sizeof(char) );
-            seqrc( local_seq, L+1+R );
+            if( S[i]->pos.strand ) {
+                if( bg_pos < R ) continue;
+                memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
+                seqrc( local_seq, L+1+R );
+            }
+            else {
+                if( bg_pos < L ) continue;
+                memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
+            }
+
+            training_seqs.push_back( new sequence( local_seq, 0 ) );
         }
-        else {
-            if( S[i]->pos.pos < L ) continue;
-            memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
-        }
-
-        training_seqs.push_back( new sequence( local_seq, 0 ) );
     }
 
 
@@ -207,7 +217,7 @@ void sequencing_bias::build( const char* ref_fn,
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
-    train_motifs( *M0, *M1, &training_seqs, max_dep_dist );
+    train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
 
 
     std::deque<sequence*>::iterator i_seq;
