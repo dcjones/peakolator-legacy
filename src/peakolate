@@ -281,6 +281,25 @@ def parse_bed( bed_fn ):
     return rows
 
 
+def print_bed( f, rows ):
+    for row in rows:
+        if row.strand == 0:
+            strand = '+'
+        elif row.strand = 1:
+            strand = '-'
+        else:
+            strand = '.'
+
+        f.write( '{seqname}\t{start}\t{end}\t{name}\t{score}\t{strand}\n'.format(
+                    seqname = row.seqname,
+                    start   = row.start,
+                    end     = row.end+1,
+                    name    = row.feature,
+                    score   = row.score,
+                    strand  = strand ) )
+
+
+
 
 def gtf_intersect_rows( rows1, rows2, stranded = True ):
     ''' Perform a basewise intersection of two list of rows, producing a third

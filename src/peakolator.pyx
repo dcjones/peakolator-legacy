@@ -299,12 +299,12 @@ cdef class dataset:
                 fasta_fn_cstr = fasta_fn
 
             if len(args) > 5:
-                complexity_penalty = float(args[5])
+                bias_complexity_penalty = float(args[5])
 
             self.cthis = new_dataset(
                             fasta_fn_cstr, bam_fn, \
                             bias_n, bias_L, bias_R,
-                            complexity_penalty )
+                            bias_complexity_penalty )
 
         elif len(args) == 1:
             self.cthis = (<dataset>args[0]).cthis.copy()
