@@ -105,6 +105,8 @@ class motif
         ~motif();
 
         void add_edge( size_t i, size_t j, const std::deque<sequence*>* data );
+        void remove_edge( size_t i, size_t j, const std::deque<sequence*>* data );
+        void add_all_edges( const std::deque<sequence*>* data );
 
         double eval( const sequence&, size_t offset = 0 ) const;
         double eval_node( size_t i, const std::deque<sequence*>* data,
@@ -128,8 +130,8 @@ class motif
         void update_likelihood_column( gsl_matrix* L, size_t j,
                                        const std::deque<sequence*>* training_seqs );
 
-        size_t n;
-        size_t k;
+        size_t n; /* number of positions */
+        size_t k; /* maximum number of edges */
         kmer_matrix* P;
 
         bool* parents;
@@ -140,6 +142,10 @@ class motif
         friend void train_motifs( motif& M0, motif& M1,
                                   const std::deque<sequence*>* training_seqs,
                                   size_t max_dep_dist, double complexity_penalty );
+
+        friend void train_motifs_backwards( motif& M0, motif& M1,
+                                            const std::deque<sequence*>* training_seqs,
+                                            size_t max_dep_dist, double complexity_penalty );
 };
 
 void train_motifs( motif& M0, motif& M1,

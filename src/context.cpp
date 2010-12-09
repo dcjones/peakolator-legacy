@@ -49,7 +49,10 @@ void context::set( dataset* dataset, const char* seqname,
     /* determine wether to examine both strand or just one */
     int s, s0, s1;
     if( strand >= 0 ) s0 = s1 = strand;
-    else              s0 = 0; s1 = 1;
+    else {
+        s0 = 0;
+        s1 = 1;
+    }
 
     clear();
     this->seqname = strdup(seqname);
@@ -188,7 +191,7 @@ double context::rate( pos i, pos j, int strand ) const
         }
     }
     else while( i <= j ) {
-        total += rs[strand] ? rs[strand][i++] : 1.0;
+        total += rs[strand] ? rs[strand][i] : 1.0;
         i++;
     }
 

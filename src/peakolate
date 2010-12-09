@@ -65,7 +65,7 @@ class dummy_queue:
         self.xs.append(x)
 
     def get(self, block = True, timeout = 0 ):
-        return self.xs.pop()
+        return self.xs.pop(0)
 
     def task_done(self):
         pass
@@ -79,10 +79,10 @@ class weighted_choice:
         assert len(xs) == len(ws)
 
         self.ws = [0] * len(xs)
-        total = sum(ws)
+        total = float(sum(ws))
         accum = 0
         for (i,w) in enumerate(ws):
-            accum += w/total if total != 0 else 0
+            accum += w/total if total != 0.0 else 0.0
             self.ws[i] = accum
 
         self.xs = xs
@@ -808,6 +808,7 @@ def main():
     # Debugging is sometimes made much easier by not launching more processes,
     # so here we fake it.
     if options.debug_mode:
+        msg.write( 'RUNNING IN DEBUG MODE',  peakolator.LOG_MSG )
         prediction_queue = dummy_queue()
 
         if options.scan_intergenic:

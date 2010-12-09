@@ -249,7 +249,7 @@ cdef class interval:
         if end     != None: self.cthis.end     = end
         if strand  != None:
             assert strand in (-1,0,1)
-            strand  = strand
+            self.cthis.strand  = strand
 
     property seqname:
         def __get__( self ):
