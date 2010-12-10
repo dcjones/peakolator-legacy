@@ -16,6 +16,7 @@ class sequencing_bias
         sequencing_bias( const char* ref_fn,
                          const char* reads_fn,
                          size_t n, pos L, pos R,
+                         bool   train_backwards = false,
                          double complexity_penalty = 1.0 );
 
         ~sequencing_bias();
@@ -32,6 +33,7 @@ class sequencing_bias
         void build( const char* ref_fn,
                     const char* reads_fn,
                     size_t n, pos L, pos R,
+                    bool   train_backwards = false,
                     double complexity_penality = 1.0 );
 
 

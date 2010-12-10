@@ -380,6 +380,10 @@ def get_constitutive_exons( rows, stranded = True ):
         intersect = partial( gtf_intersect_rows, stranded = stranded )
         exons[gene_id] = reduce( intersect, [ transcripts[id] for id in genes[gene_id] ] )
 
+        if not stranded:
+            for (i,exon) in enumerate(exons[gene_id]):
+                exons[gene_id][i] = exon._replace( strand = -1 )
+
     msg.write( 'done. (%d constitutive exons)\n' % \
                     sum( map( len, exons.itervalues() ) ) )
 
@@ -438,7 +442,7 @@ def get_constitutive_introns( rows, stranded = True ):
                            start      = row1.end+1,
                            end        = row2.start-1,
                            score      = row1.score,
-                           strand     = row1.strand,
+                           strand     = row1.strand if stranded else -1,
                            frame      = row1.frame,
                            attributes = row1.attributes )
 
@@ -793,7 +797,7 @@ def main():
 
 
     # load read data, assess sequencing bias
-    data = peakolator.dataset( options.ref_fn, reads_fn, 100000, options.L, options.R, 1.0 )
+    data = peakolator.dataset( options.ref_fn, reads_fn, 100000, options.L, options.R, False, 1.0 )
 
     # train background model
     d_train = 1000

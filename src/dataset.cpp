@@ -21,6 +21,7 @@ using namespace std;
 dataset::dataset(
         const char* ref_fn, const char* reads_fn,
         size_t bias_n, pos bias_L, pos bias_R,
+        bool   train_backwards,
         double bias_complexity_penalty )
 {
     log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
@@ -28,6 +29,7 @@ dataset::dataset(
     if( ref_fn ) {
         bias = new sequencing_bias( ref_fn, reads_fn,
                                     bias_n, bias_L, bias_R,
+                                    train_backwards,
                                     bias_complexity_penalty );
     }
     else bias = NULL;

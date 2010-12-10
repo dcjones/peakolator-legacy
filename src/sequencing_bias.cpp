@@ -32,12 +32,13 @@ sequencing_bias::sequencing_bias()
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
                                   size_t n, pos L, pos R,
+                                  bool   train_backwards,
                                   double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, reads_fn, n, L, R, complexity_penalty );
+    build( ref_fn, reads_fn, n, L, R, train_backwards, complexity_penalty );
 }
 
 sequencing_bias* sequencing_bias::copy() const
@@ -84,6 +85,7 @@ void sequencing_bias::clear()
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
                              size_t n, pos L, pos R,
+                             bool   train_backwards,
                              double complexity_penalty )
 {
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
@@ -217,7 +219,11 @@ void sequencing_bias::build( const char* ref_fn,
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
-    train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
+    if( train_backwards ) {
+        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
+    } else {
+        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
+    }
 
 
     std::deque<sequence*>::iterator i_seq;
