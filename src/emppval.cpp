@@ -1,7 +1,7 @@
 
 
 #include "emppval.hpp"
-#include "model.hpp"
+#include "scanner.hpp"
 #include "logger.h"
 
 #include <gsl/gsl_statistics_double.h>
@@ -96,7 +96,7 @@ emppval::emppval( parameters* params  )
 
     /* dummy context */
     context ctx;
-    model* M;
+    scanner* M;
 
     int i;
     size_t j;
@@ -104,7 +104,7 @@ emppval::emppval( parameters* params  )
         log_printf( LOG_MSG, "fitting length = %d ... ", i*spacing );
 
         /* generate examples */
-        M = new model( params, &ctx );
+        M = new scanner( params, &ctx );
 
         for( j = 0; j < params->n_mc; j++ ) {
             ctx.set_noise( params->dist, spacing*i );

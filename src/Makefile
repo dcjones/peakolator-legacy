@@ -7,7 +7,7 @@ OBJ=common.o \
 	nulldist.o \
 	intervals.o \
 	parameters.o \
-	model.o \
+	scanner.o \
 	dataset.o \
 	context.o \
 	emppval.o \

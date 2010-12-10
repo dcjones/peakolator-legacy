@@ -1,5 +1,5 @@
 
-#include "model.hpp"
+#include "scanner.hpp"
 #include "emppval.hpp"
 #include "common.hpp"
 #include "logger.h"
@@ -22,7 +22,7 @@ using namespace std;
 
 
 /* construction */
-model::model( 
+scanner::scanner( 
                 parameters* params,
                 context*    ctx )
 {
@@ -34,13 +34,13 @@ model::model(
 }
 
 
-model::~model()
+scanner::~scanner()
 {
 }
 
 
 
-mpfr_class model::QX( double r, rcount x )
+mpfr_class scanner::QX( double r, rcount x )
 {
     return params->dist.QX( r, x );
 }
@@ -48,8 +48,8 @@ mpfr_class model::QX( double r, rcount x )
 
 
 
-/* run the model, returning all significant sub-intervals */
-interval_stack* model::run()
+/* run the scanner, returning all significant sub-intervals */
+interval_stack* scanner::run()
 {
     log_printf( LOG_MSG, "running scan of length %d\n", ctx->length() );
 
@@ -103,25 +103,25 @@ interval_stack* model::run()
 
 
 
-/*
- * Exploit the fact that the least likely interval should begin and end on
- * positions with non-zero read counts.
- */
-void model::trim_candidate( subinterval& I )
+void scanner::conditional_push_copy(
+                 subinterval_bound_pqueue& q,
+                 subinterval_bound& x,
+                 const mpfr_class& p_max )
 {
-    while( I.length() > params->d_min && ctx->count(I.start) == 0 ) {
-        I.rate -= ctx->rate(I.start);
-        I.start++;
-    }
-
-    while( I.length() > params->d_min && ctx->count(I.end)   == 0 ) {
-        I.rate -= ctx->rate(I.end);
-        I.end--;
+    if( x.count > 0 &&
+        x.min_length() <= params->d_max &&
+        x.max_length() >= params->d_min )
+    {
+        x.pval = QX(
+                     ctx->min_rate( x, params->d_min ),
+                     x.count );
+        if( x.pval < p_max ) q.push( new subinterval_bound(x) );
     }
 }
 
 
-subinterval model::least_likely_interval( pos i, pos j, double alpha )
+
+subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 {
     log_printf( LOG_BLAB, "scanning %dnt...", j-i+1 );
     log_indent();
@@ -133,7 +133,7 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
     const size_t epsilon = 50;
 
     /* candidate bounds */
-    subinterval_bound_pqueue Q( this );
+    subinterval_bound_pqueue Q;
 
     /* temporary values for count and rate, resp. */
     double r;
@@ -176,11 +176,9 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
         B = Q.pop(); 
 
 
-#ifdef PEAKOLATOR_PVAL_HEURISTIC
         /* because these are popped in order of increasing p-value lower bound,
          * we can halt as soon as we see something with a hopeless lower bound.  */
         if( B->pval >= S_min.pval ) break;
-#endif
 
         char* tmp = mpfr_to_string( B->pval );
         //log_printf( "popped with p-val = %s", tmp );
@@ -304,17 +302,17 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
 
             /* Left: ####|---- */
             C.set( B->I_min, mid1, r1, c1 );
-            Q.conditional_push_copy( C, S_min.pval );
+            conditional_push_copy( Q, C, S_min.pval );
 
 
             /* Right: ----|#### */
             C.set( mid1+1, B->J_max, B->rate - r1, B->count - c1 );
-            Q.conditional_push_copy( C, S_min.pval );
+            conditional_push_copy( Q, C, S_min.pval );
 
 
             /* Center: ####|#### */
             C.set( B->I_min, mid1, mid1+1, B->J_max, B->rate, B->count );
-            Q.conditional_push_copy( C, S_min.pval );
+            conditional_push_copy( Q, C, S_min.pval );
         }
 
 
@@ -334,24 +332,24 @@ subinterval model::least_likely_interval( pos i, pos j, double alpha )
 
             /* ####----|----####  */ 
             C.set( B->I_min, mid1, mid2, B->J_max, B->rate, B->count );
-            Q.conditional_push_copy( C, S_min.pval );
+            conditional_push_copy( Q, C, S_min.pval );
 
 
             /* ----####|####----  */ 
             C.set( mid1+1, B->I_max, B->J_min, mid2-1, B->rate - r1 - r2, B->count - c1 - c2 );
-            Q.conditional_push_copy( C, S_min.pval );
+            conditional_push_copy( Q, C, S_min.pval );
 
 
             /* ####----|####----  */ 
             if( c1 > 0 || mid2 - mid1 - 1 < params->d_min  ) {
                 C.set( B->I_min, mid1, B->J_min, mid2-1, B->rate - r2, B->count - c2 );
-                Q.conditional_push_copy( C, S_min.pval );
+                conditional_push_copy( Q, C, S_min.pval );
             }
 
             /* ----####|----####  */ 
             if( c2 > 0 || mid2 - mid1 - 1 < params->d_min ) {
                 C.set( mid1+1, B->I_max, mid2, B->J_max, B->rate - r1, B->count - c1 );
-                Q.conditional_push_copy( C, S_min.pval );
+                conditional_push_copy( Q, C, S_min.pval );
             }
 
 

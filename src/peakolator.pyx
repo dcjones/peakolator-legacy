@@ -124,7 +124,8 @@ cdef extern from "context.hpp":
     void del_context "delete" ( c_context* context )
 
 
-cdef extern from "model.hpp":
+
+cdef extern from "parameters.hpp":
 
     ctypedef struct c_parameters "parameters":
         c_parameters* copy()
@@ -146,15 +147,19 @@ cdef extern from "model.hpp":
 
 
 
-    ctypedef struct c_model "model":
+
+cdef extern from "scanner.hpp":
+
+
+    ctypedef struct c_scanner "scanner":
         c_interval_stack* run()
 
 
-    c_model* new_model "new model" \
+    c_scanner* new_scanner "new scanner" \
             ( c_parameters* params,
               c_context* context )
 
-    void del_model "delete" ( c_model* model )
+    void del_scanner "delete" ( c_scanner* )
 
 
 
@@ -449,15 +454,15 @@ cdef class parameters:
 
 
 
-## model
-cdef class model:
-    cdef c_model* cthis
+## scanner 
+cdef class scanner:
+    cdef c_scanner* cthis
 
     def __cinit__( self, parameters prm, context ctx ):
-        self.cthis = new_model( prm.cthis, ctx.cthis )
+        self.cthis = new_scanner( prm.cthis, ctx.cthis )
 
     def __dealloc__( self ):
-        del_model( self.cthis )
+        del_scanner( self.cthis )
 
     def run( self ):
         cdef c_interval_stack* IS = self.cthis.run()

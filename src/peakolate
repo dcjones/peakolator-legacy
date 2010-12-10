@@ -567,7 +567,7 @@ def peakolate( region_queue, prediction_queue, data, params ):
 
         ctx.set( data, seqname, start, end, strand )
 
-        M = peakolator.model( params, ctx )
+        M = peakolator.scanner( params, ctx )
 
         for I in M.run():
             prediction_queue.put(
@@ -625,7 +625,7 @@ def peakolate_intron( gene_queue, prediction_queue, data, params ):
 
         for intron in introns:
             ctx.set( data, intron.seqname, intron.start, intron.end, intron.strand )
-            M = peakolator.model( params, ctx )
+            M = peakolator.scanner( params, ctx )
             for I in M.run():
                 prediction_queue.put(
                         (I.seqname, I.start, I.end,
