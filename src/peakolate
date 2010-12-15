@@ -104,6 +104,8 @@ class weighted_choice:
 usage = '%prog [options] reads.bam'
 
 option_list = [
+    optparse.make_option( '-v', '--verbose', dest='verbose', action='store_true', \
+                          help='print lots of output', default=False ),
     optparse.make_option( '-S', '--unstranded', \
                            dest='stranded', action='store_false', default=True, \
                            help='reads are not strand specific' ),
@@ -725,6 +727,10 @@ def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
 def main():
     opt_parser = optparse.OptionParser( usage = usage, option_list = option_list )
     (options,args) = opt_parser.parse_args()
+
+    if options.verbose:
+        msg.verbosity( peakolator.LOG_BLAB )
+
 
     if len(args) == 0:
         opt_parser.error( 'specify reads file' )
