@@ -29,18 +29,17 @@ class emppval
 
         int n;
         pos spacing;
-        mpfr_class* gumbel_locs;
-        mpfr_class* gumbel_scales;
 
         /* results from monte carlo trials */
         double*  qx_mc;
-        double   qx_mc_mean;
 
         /* generalized extreme value distribution parameters */
-        mpfr_class* mu;
-        mpfr_class* sigma;
-        mpfr_class* xi;
-        
+        /* linear models for the dependence of the extreme value distribution
+         * parameters on the length of the sequence being scanned. */
+        mpfr_class c_mu[2];
+        mpfr_class c_sigma[2];
+        mpfr_class c_xi[2];
+
         friend double gev_objf( unsigned int, const double*, double*, void* );
 };
 

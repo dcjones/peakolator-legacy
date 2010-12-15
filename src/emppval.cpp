@@ -5,6 +5,7 @@
 #include "logger.h"
 
 #include <gsl/gsl_statistics_double.h>
+#include <gsl/gsl_fit.h>
 
 
 template <typename T> T sq( T x ) { return x*x; }
@@ -77,38 +78,55 @@ double gev_objf( unsigned int n, const double* params, double* grad, void* model
 
 
 emppval::emppval( parameters* params  )
-    : mu(NULL), sigma(NULL), xi(NULL)
 {
-    log_puts( LOG_MSG, "initializing p-value adjustment model ...\n" );
+    log_puts( LOG_MSG, "initializing emperical p-value model ...\n" );
     log_indent();
 
     this->params  = params;
     this->n       = params->padj_n;
     this->spacing = params->padj_spacing;
 
-    mu    = new mpfr_class[n];
-    sigma = new mpfr_class[n];
-    xi    = new mpfr_class[n];
 
+    /* results of parameter estimation for various equally spaced lengths */
+    gsl_vector* mu    = gsl_vector_alloc( n );
+    gsl_vector* sigma = gsl_vector_alloc( n );
+    gsl_vector* xi    = gsl_vector_alloc( n );
+
+    /* lengths vector */
+    gsl_vector* ms    = gsl_vector_alloc( n );
+
+
+    /* temporary results of the current round of fitting */
     double mu_i, sigma_i, xi_i;
 
+    /* results for each monte carlo round during the current round of fitting */
     qx_mc = new double[params->n_mc];
 
-    /* dummy context */
+
+    /*
+     *   Estimate parameters for various lengths.
+     */
+
+    /* dummy context, for noise generation */
     context ctx;
     scanner* M;
 
     int i;
     size_t j;
-    for( i = 1; i < n; i++ ) {
-        log_printf( LOG_MSG, "fitting length = %d ... ", i*spacing );
+    size_t m;
+    for( i = 0; i < n; i++ ) {
+        m = (i+1)*spacing;
+        log_printf( LOG_MSG, "fitting length = %d ... ", m );
 
         /* generate examples */
         M = new scanner( params, &ctx );
 
+
+        gsl_vector_set( ms, i, m );
+
         for( j = 0; j < params->n_mc; j++ ) {
-            ctx.set_noise( params->dist, spacing*i );
-            qx_mc[j] = mpfr_class(log( M->least_likely_interval( 0, i*spacing-1, 1.0 ).pval )).get_d();
+            ctx.set_noise( params->dist, m );
+            qx_mc[j] = mpfr_class(log( M->least_likely_interval( 0, m-1, 1.0 ).pval )).get_d();
         }
         delete M;
         M = NULL;
@@ -125,34 +143,56 @@ emppval::emppval( parameters* params  )
                     i*spacing, mu_i, sigma_i, xi_i );
 
 
-        mu[i]    = mu_i;
-        sigma[i] = sigma_i;
-        xi[i]    = xi_i;
+        gsl_vector_set( mu,    i, mu_i );
+        gsl_vector_set( sigma, i, sigma_i );
+        gsl_vector_set( xi,    i, xi_i );
 
         log_puts( LOG_MSG, "done.\n" );
     }
 
-
-    /* XXX: for debugging */
-#if 0
-    /* report the last sample with fit values */
-    FILE* evdlog = fopen( "evd.tab", "w" );
-    for( j = 0; j < params->n_mc; j++ ) {
-        fprintf( evdlog, "%.8e\n", qx_mc[j] );
-    }
-    fclose( evdlog );
-
-    evdlog = fopen( "evd.params.tab", "w" );
-    mpfr_fprintf( evdlog, "loc   <- %.8e\n", mu_i );
-    mpfr_fprintf( evdlog, "scale <- %.8e\n", sigma_i );
-    mpfr_fprintf( evdlog, "shape <- %.8e\n", xi_i );
-    fclose( evdlog );
-#endif
-    /* XXX: end debugging output */
-
-
-
     delete[] qx_mc;
+
+
+
+    /* Fit a linear model of the dependence of parameters on lengths. */
+
+    double c0, c1, cov00, cov01, cov11, sumsq;
+
+    gsl_fit_linear( ms->data, ms->stride,
+                    mu->data, mu->stride,
+                    n, &c0, &c1, &cov00, &cov01, &cov11, &sumsq );
+    c_mu[0] = c0; c_mu[1] = c1;
+
+    gsl_fit_linear( ms->data, ms->stride,
+                    sigma->data, sigma->stride,
+                    n, &c0, &c1, &cov00, &cov01, &cov11, &sumsq );
+    c_sigma[0] = c0; c_sigma[1] = c1;
+
+    gsl_fit_linear( ms->data, ms->stride,
+                    xi->data, xi->stride,
+                    n, &c0, &c1, &cov00, &cov01, &cov11, &sumsq );
+    c_xi[0] = c0; c_xi[1] = c1;
+
+
+    log_printf( LOG_BLAB,
+                "gev mu:    %0.4e + %0.4e * length\n",
+                c_mu[0].get_d(), c_mu[1].get_d() );
+
+    log_printf( LOG_BLAB,
+                "gev sigma:    %0.4e + %0.4e * length\n",
+                c_sigma[0].get_d(), c_sigma[1].get_d() );
+
+    log_printf( LOG_BLAB,
+                "gev xi:    %0.4e + %0.4e * length\n",
+                c_xi[0].get_d(), c_xi[1].get_d() );
+
+
+
+
+    gsl_vector_free( mu );
+    gsl_vector_free( sigma );
+    gsl_vector_free( xi );
+    gsl_vector_free( ms );
 
     log_unindent();
     log_puts( LOG_MSG, "done.\n" );
@@ -165,16 +205,9 @@ emppval::emppval( const emppval& padj )
     n       = padj.n;
     spacing = padj.spacing;
 
-    mu    = new mpfr_class[n];
-    sigma = new mpfr_class[n];
-    xi    = new mpfr_class[n];
-
-    int i;
-    for( i = 0; i < n; i++ ) {
-        mu[i]    = padj.mu[i];
-        sigma[i] = padj.sigma[i];
-        xi[i]    = padj.xi[i];
-    }
+    c_mu[0]    = padj.c_mu[0];    c_mu[1]    = padj.c_mu[1];
+    c_sigma[0] = padj.c_sigma[0]; c_sigma[1] = padj.c_sigma[1];
+    c_xi[0]    = padj.c_xi[0];    c_xi[1]    = padj.c_xi[1];
 
     params = padj.params;
 }
@@ -184,38 +217,23 @@ emppval::emppval( const emppval& padj )
 
 emppval::~emppval()
 {
-    delete[] mu;
-    delete[] sigma;
-    delete[] xi;
 }
 
 
 mpfr_class emppval::adjust( const mpfr_class& pval, pos len ) const
 {
     /* find lerped parameters */
-    mpfr_class mu_i, sigma_i, xi_i;
-    if( len/spacing == 0 ) {
-        mu_i    = mu[1];
-        sigma_i = sigma[1];
-        xi_i    = xi[1];
-    }
-    else if( len/spacing >= n-1 ) {
-        mu_i    = mu[n-1];
-        sigma_i = sigma[n-1];
-        xi_i    = xi[n-1];
-    }
-    else {
-        int i = len / spacing;
-        double q = (double)len / (double)spacing;
-        q = q - floor(q);
+    mpfr_class mu, sigma, xi;
 
-        mu_i    = mu[i]*(1-q)    + mu[i+1]*q;
-        sigma_i = sigma[i]*(1-q) + sigma[i+1]*q;
-        xi_i    = xi[i]*(1-q) + xi[i+1]*q;
-    }
+    mu    = c_mu[0]    + len * c_mu[1];
+    sigma = c_sigma[0] + len * c_sigma[1];
+    xi    = c_xi[0]    + len * c_xi[1];
+
+    if( sigma <= 0.0 ) sigma = 1e-20;
+
 
     /* adjust */
-    mpfr_class padj = gev_cdf<mpfr_class>( log(pval), mu_i, sigma_i, xi_i );
+    mpfr_class padj = gev_cdf<mpfr_class>( log(pval), mu, sigma, xi );
 
     char *pval_str, *padj_str;
     mpfr_asprintf( &pval_str, "%.4Re", pval.get_mpfr_t() );

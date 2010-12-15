@@ -11,7 +11,7 @@ nulldist::nulldist()
     : p(0.0), m(2000), n(100), A(NULL)
 {
     /* initialize rng */
-    rng = gsl_rng_alloc(gsl_rng_mt19937);
+    rng = gsl_rng_alloc(gsl_rng_taus2);
     gsl_rng_set(rng,time(NULL));
 }
 

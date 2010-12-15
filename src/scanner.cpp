@@ -123,7 +123,7 @@ void scanner::conditional_push_copy(
 
 subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 {
-    log_printf( LOG_BLAB, "scanning %dnt...", j-i+1 );
+    log_printf( LOG_BLAB, "scanning %dnt...\n", j-i+1 );
     log_indent();
     clock_t t0, t1;
     t0 = clock();
@@ -187,7 +187,7 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
         m = B->subinterval_count( params->d_min, params->d_max );
 
         /* can we use B as a new bound? */
-        if( B->max_length() < params->d_min ) {
+        if( B->max_length() <= params->d_max ) {
             S.pval = QX( B->rate, B->count );
             if( S.pval < S_min.pval ) {
                 S_min.start = B->I_min;
@@ -196,8 +196,8 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
                 S_min.rate  = B->rate;
                 S_min.pval  = S.pval;
                 char* tmp = mpfr_to_string( S_min.pval );
-                log_printf( LOG_BLAB, "new min: (i,j,pval) = (%d,%d,%s)",
-                            S.start, S.end, tmp );
+                log_printf( LOG_BLAB, "new min (A): (i,j,pval) = (%d,%d,%s)\n",
+                            S_min.start, S_min.end, tmp );
                 free(tmp);
             }
         }
@@ -267,7 +267,7 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
                         S_min = S;
 
                         char* tmp = mpfr_to_string( S_min.pval );
-                        log_printf( LOG_BLAB, "new min: (i,j,pval) = (%d,%d,%s)",
+                        log_printf( LOG_BLAB, "new min (B): (i,j,pval) = (%d,%d,%s)\n",
                                     S.start, S.end, tmp );
                         free(tmp);
                     }

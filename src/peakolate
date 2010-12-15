@@ -795,11 +795,11 @@ def main():
     # parameters
     params = peakolator.parameters()
     params.alpha = 0.01
-    params.d_min = 70
+    params.d_min = 50
     params.d_max = 100000
     params.n_mc  = 100
-    params.padj_spacing = 100000
-    params.padj_n       = 10
+    params.padj_spacing = 1000000
+    params.padj_n       = 5
 
 
     # load read data, assess sequencing bias
