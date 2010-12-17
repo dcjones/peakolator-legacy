@@ -67,6 +67,43 @@ sequencing_bias* sequencing_bias::copy() const
 }
 
 
+void sequencing_bias::to_yaml( YAML::Emitter& out ) const
+{
+    out << YAML::BeginMap;
+
+    out << YAML::Key   << "L";
+    out << YAML::Value << L;
+
+    out << YAML::Key   << "R";
+    out << YAML::Value << R;
+
+    out << YAML::Key   << "motif0";
+    out << YAML::Value;
+    M0->to_yaml( out );
+
+    out << YAML::Key   << "motif1";
+    out << YAML::Value;
+    M1->to_yaml( out );
+
+    out << YAML::EndMap;
+}
+
+
+void sequencing_bias::save_to_file( const char* fn ) const
+{
+    FILE* f = fopen( fn, "w" );
+    if( f == NULL ) {
+        log_printf( LOG_ERROR, "Can\'t open file %s\n", fn );
+        exit(1);
+    }
+
+    YAML::Emitter out;
+    this->to_yaml( out );
+
+    fputs( out.c_str(), f );
+    fclose( f );
+}
+
 
 void sequencing_bias::clear()
 {
@@ -241,6 +278,8 @@ void sequencing_bias::build( const char* ref_fn,
     samclose(reads_f);
     table_destroy(&T);
     gsl_rng_free(rng);
+
+    save_to_file( "sequencing_bias.yml" );
 
     log_unindent();
 }

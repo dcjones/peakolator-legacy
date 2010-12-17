@@ -1,7 +1,9 @@
 
 include ../config.inc
 
-OBJ=common.o \
+OBJ= \
+	peakolator.o \
+	common.o \
 	logger.o \
 	annotations.o \
 	nulldist.o \
@@ -16,18 +18,18 @@ OBJ=common.o \
 	superfasthash.o \
 	hash.o \
 	gmpfrxx/libgmpfrxx.a \
-	samtools/libbam.a
+	samtools/libbam.a \
+	yaml-cpp/libyaml-cpp.a
 
 all : peakolator.so
 
 clean :
 	rm -f ${OBJ}
 	rm -f peakolator.so
-	rm -f peakolator_module.cpp
-	rm -f plot_aggregate_bias
-	rm -f plot_bias_tracks
+	rm -f peakolator.cpp
 	cd samtools ; ${MAKE} clean
 	cd gmpfrxx ; ${MAKE} clean
+	cd yaml-cpp ; ${MAKE} clean
 
 .c.o :
 	gcc ${CFLAGS} ${INC} -c $<
@@ -40,7 +42,7 @@ clean :
 peakolator.cpp : peakolator.pyx
 	cython --cplus -o $@ $< 
 
-peakolator.so : peakolator.cpp ${OBJ}
+peakolator.so : ${OBJ}
 	g++ ${CPPFLAGS} ${INC} -shared -o $@ $^ ${LIBS}
 
 samtools/libbam.a :
@@ -49,3 +51,5 @@ samtools/libbam.a :
 gmpfrxx/libgmpfrxx.a :
 	cd gmpfrxx ; ${MAKE} libgmpfrxx.a
 
+yaml-cpp/libyaml-cpp.a :
+	cd yaml-cpp ; ${MAKE} libyaml-cpp.a

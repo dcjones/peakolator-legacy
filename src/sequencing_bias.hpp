@@ -21,6 +21,9 @@ class sequencing_bias
 
         ~sequencing_bias();
 
+        void save_to_file( const char* fn ) const;
+        void to_yaml( YAML::Emitter& ) const;
+
         double* get_bias( const char* seqname, pos start, pos end, int strand );
 
         char* print_model_graph();

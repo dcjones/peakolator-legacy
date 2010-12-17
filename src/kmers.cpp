@@ -45,6 +45,30 @@ void kmer_matrix::operator=( const kmer_matrix& M )
 }
 
 
+void kmer_matrix::to_yaml( YAML::Emitter& out ) const
+{
+    out << YAML::BeginMap;
+
+    out << YAML::Key   << "k";
+    out << YAML::Value << k;
+    out << YAML::Key   << "size1";
+    out << YAML::Value << A->size1;
+    out << YAML::Key   << "size2";
+    out << YAML::Value << A->size2;
+    out << YAML::Key   << "A";
+    out << YAML::Flow;
+    out << YAML::Value;
+    out << YAML::BeginSeq;
+    size_t i;
+    for( i = 0; i < A->size1 * A->size2; i++ ) {
+        out << A->data[i];
+    }
+    out << YAML::EndSeq;
+
+    out << YAML::EndMap;
+}
+
+
 size_t kmer_matrix::n() const
 {
     return A->size1;
@@ -275,6 +299,33 @@ motif::~motif()
 {
     delete[] parents;
     delete P;
+}
+
+
+void motif::to_yaml( YAML::Emitter& out ) const
+{
+    out << YAML::BeginMap;
+
+    out << YAML::Key   << "n";
+    out << YAML::Value << n;
+
+    out << YAML::Key   << "k";
+    out << YAML::Value << k;
+
+    out << YAML::Key << "parents";
+    out << YAML::Value;
+    out << YAML::Flow << YAML::BeginSeq;
+    size_t i;
+    for( i = 0; i < n*n; i++ ) {
+        out << (parents[i] ? 1 : 0);
+    }
+    out << YAML::EndSeq;
+
+    out << YAML::Key   << "P";
+    out << YAML::Value;
+    P->to_yaml( out );
+
+    out << YAML::EndMap;
 }
 
 

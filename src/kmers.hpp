@@ -2,9 +2,9 @@
 #ifndef PEAKOLATOR_KMERS
 #define PEAKOLATOR_KMERS
 
+#include "yaml-cpp/yaml.h"
 #include <boost/cstdint.hpp>
 #include <gsl/gsl_matrix.h>
-
 #include <deque>
 #include <set>
 
@@ -28,6 +28,8 @@ class kmer_matrix
         kmer_matrix( const kmer_matrix& );
         void operator=( const kmer_matrix& );
 
+        void to_yaml( YAML::Emitter& out ) const;
+
         size_t n() const;
         size_t m() const;
 
@@ -37,6 +39,7 @@ class kmer_matrix
         void   inc( size_t i, kmer K, double x = 1.0 );
         void   setall( double x );
         void   setrow( size_t i, double x );
+
 
 
         /* normalize to turn each position into a proper distribution over kmers
@@ -104,6 +107,8 @@ class motif
         motif( const motif& );
         ~motif();
 
+        void to_yaml( YAML::Emitter& ) const;
+
         void add_edge( size_t i, size_t j, const std::deque<sequence*>* data );
         void remove_edge( size_t i, size_t j, const std::deque<sequence*>* data );
         void add_all_edges( const std::deque<sequence*>* data );
@@ -118,7 +123,7 @@ class motif
         void restore_stored_row();
         char* print_model_graph( int offset = 0 );
 
-        int meta;
+        int meta; /* which subset of the training data to consider */
 
     private:
 
