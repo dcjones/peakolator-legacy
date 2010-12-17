@@ -1,6 +1,23 @@
 
 /*
  * Pvalue adjustments using Monte Carlo methods.
+ *
+ * If a interval of length l is scanned, discovering the most significant
+ * scoring region with score s. A p-value is produced according to a model,
+ *
+ * log(s) ~ GEV( mu, sigma, xi )
+ *
+ * Where, GEV is a three-parameter generalized extreme value distribution,
+ * and the parameters are linear in the log length. That is,
+ *
+ *      Position: mu    = mu0    + mu1    * log(l)
+ *      Scale:    sigma = sigma0 + sigma1 * log(l)
+ *      Shape:    xi    = xi0    + xi1    * log(l)
+ *
+ * This class handles computing these p-values given the model, as well as
+ * performing maximimum likelihood fitting of the model using monte-carlo
+ * trials.
+ *
  */
 
 
@@ -27,15 +44,6 @@ class emppval
 
         parameters* params;
 
-        int n;
-        pos spacing;
-
-        /* results from monte carlo trials */
-        double*  qx_mc;
-
-        /* generalized extreme value distribution parameters */
-        /* linear models for the dependence of the extreme value distribution
-         * parameters on the length of the sequence being scanned. */
         mpfr_class c_mu[2];
         mpfr_class c_sigma[2];
         mpfr_class c_xi[2];

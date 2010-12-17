@@ -220,25 +220,16 @@ pos subinterval_bound::subinterval_bound::max_length() const
 
 pos subinterval_bound::subinterval_bound::min_length() const
 {
-    return J_min - I_max + 1;
+
+    return max( J_min - I_max + 1, (pos)0 );
 }
 
 
-
-#ifdef PEAKOLATOR_PVAL_HEURISTIC
 bool subinterval_bound_priority::operator()( subinterval_bound*& a,
                                              subinterval_bound*& b )
 {
     return a->pval > b->pval;
 }
-#else
-bool subinterval_bound_priority::operator()( subinterval_bound*& a,
-                                             subinterval_bound*& b )
-{
-    return a->count/a->rate < b->count/b->rate;
-
-}
-#endif
 
 
 subinterval_bound_pqueue::subinterval_bound_pqueue()
@@ -253,11 +244,13 @@ subinterval_bound_pqueue::~subinterval_bound_pqueue()
     }
 }
 
+
 void subinterval_bound_pqueue::push( subinterval_bound* x )
 {
     push_back( x );
     push_heap( begin(), end(), subinterval_bound_priority() );
 }
+
 
 subinterval_bound* subinterval_bound_pqueue::pop()
 {

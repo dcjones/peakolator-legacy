@@ -206,9 +206,9 @@ double context::min_rate( const subinterval_bound& B, pos d_min ) const
 
 double context::min_rate( const subinterval_bound& B, pos d_min, int strand ) const
 {
-
     if( B.disjoint_bounds() ) {
         return rate( B.I_max, B.J_min, strand );
+        /* TODO: incorrect when B.J_min - B.I_max + 1 < d_min */
     }
 
     else if( B.equal_bounds() ) {
@@ -216,10 +216,10 @@ double context::min_rate( const subinterval_bound& B, pos d_min, int strand ) co
         double r = 0.0;
         pos i;
 
-        for( i = B.I_min; i <= B.J_min; i++ ) {
-            r += rate(i);;
+        for( i = B.I_min; i <= B.I_max - d_min + 1; i++ ) {
+            r += rate(i);
 
-            if( i - start + 1 >= d_min ) {
+            if( i - B.I_min + 1 >= d_min ) {
                 r -= rate(i-1);
                 if( r < rate_min ) rate_min = r;
             }

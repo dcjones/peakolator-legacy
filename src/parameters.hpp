@@ -31,15 +31,10 @@ class parameters
         pos d_min; 
         pos d_max;
 
-        /* number of samples to take to compute the emperical p-value */
-        size_t n_mc;
-
         /* distribution lookup */
         nulldist dist;
 
         /* pvalue model */
-        pos padj_spacing;
-        int padj_n;
         emppval* padj;
 
     private:

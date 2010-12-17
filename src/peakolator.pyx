@@ -135,9 +135,6 @@ cdef extern from "parameters.hpp":
         double r, p
         pos d_min
         pos d_max
-        size_t n_mc
-        pos padj_spacing
-        int padj_n
         pass
 
     c_parameters* new_parameters \
@@ -438,19 +435,6 @@ cdef class parameters:
     property d_max:
         def __get__(self):      return self.cthis.d_max
         def __set__(self,d_max): self.cthis.d_max = d_max
-
-    property n_mc:
-        def __get__(self):      return self.cthis.n_mc
-        def __set__(self,n_mc): self.cthis.n_mc = n_mc
-
-    property padj_spacing:
-        def __get__(self):              return self.cthis.padj_spacing
-        def __set__(self,padj_spacing): self.cthis.padj_spacing = padj_spacing
-
-    property padj_n:
-        def __get__(self):        return self.cthis.padj_n
-        def __set__(self,padj_n): self.cthis.padj_n = padj_n
-
 
 
 

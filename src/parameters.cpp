@@ -9,9 +9,6 @@ parameters::parameters()
     , p(1.0)
     , d_min(70)
     , d_max(100000)
-    , n_mc(100)
-    , padj_spacing(10000)
-    , padj_n(20)
     , padj(NULL)
 {
     mpfr_class::set_dprec(_mpfr_prec_);
@@ -24,9 +21,6 @@ parameters::parameters( const parameters& p )
     , p(p.p)
     , d_min(p.d_min)
     , d_max(p.d_max)
-    , n_mc(p.n_mc)
-    , padj_spacing(p.padj_spacing)
-    , padj_n(p.padj_n)
 {
     padj = p.padj ? new emppval(*p.padj) : NULL;
     mpfr_class::set_dprec(_mpfr_prec_);

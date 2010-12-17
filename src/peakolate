@@ -730,6 +730,7 @@ def main():
 
     if options.verbose:
         msg.verbosity( peakolator.LOG_BLAB )
+        msg.write( 'VERBOSE\n', peakolator.LOG_BLAB )
 
 
     if len(args) == 0:
@@ -797,9 +798,6 @@ def main():
     params.alpha = 0.01
     params.d_min = 50
     params.d_max = 100000
-    params.n_mc  = 100
-    params.padj_spacing = 1000000
-    params.padj_n       = 5
 
 
     # load read data, assess sequencing bias
@@ -807,7 +805,8 @@ def main():
 
     # train background model
     d_train = 1000
-    train = random_training_examples( greylist_intergenic, d_train, 10000,
+    n_train = 10000
+    train = random_training_examples( greylist_intergenic, d_train, n_train,
                                       stranded = options.stranded )
     (params.r,params.p) = data.fit_null_distr( train )
 

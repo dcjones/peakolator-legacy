@@ -180,9 +180,9 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
          * we can halt as soon as we see something with a hopeless lower bound.  */
         if( B->pval >= S_min.pval ) break;
 
-        char* tmp = mpfr_to_string( B->pval );
+        //char* tmp = mpfr_to_string( B->pval );
         //log_printf( "popped with p-val = %s", tmp );
-        free(tmp);
+        //free(tmp);
 
         m = B->subinterval_count( params->d_min, params->d_max );
 
