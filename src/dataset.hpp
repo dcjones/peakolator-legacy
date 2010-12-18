@@ -11,11 +11,7 @@
 class dataset
 {
     public:
-        dataset( const char* fasta_fn, const char* bam_fn,
-                 size_t bias_n, pos bias_L, pos bias_R,
-                 bool   train_backwards = false,
-                 double bias_complexity_penalty = 1.0 );
-
+        dataset( const char* reads_fn, sequencing_bias* sb );
         dataset* copy() const;
 
         void fit_null_distr( interval_stack* is, double* r, double* p );

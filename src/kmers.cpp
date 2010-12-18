@@ -7,6 +7,24 @@
 #include <cstring>
 #include <gsl/gsl_math.h>
 
+kmer_matrix::kmer_matrix( const YAML::Node& node )
+{
+    size_t size1, size2;
+    node["k"] >> k;
+
+    node["size1"] >> size1;
+    node["size2"] >> size2;
+
+    A = gsl_matrix_alloc( size1, size2 );
+
+    const YAML::Node& node_A = node["A"];
+    size_t i;
+    for( i = 0; i < size1*size2; i++ ) {
+        node_A[i] >> A->data[i];
+    }
+
+    stored_row = gsl_vector_alloc( size2 );
+}
 
 kmer_matrix::kmer_matrix( size_t n, size_t k )
     : k(k)
@@ -271,6 +289,24 @@ bool sequence::get( const bool* indexes, size_t maxn, kmer& K, size_t seq_offset
 
 const double motif::pseudocount = 1;
 
+motif::motif( const YAML::Node& node )
+{
+    node["n"] >> n;
+    node["k"] >> k;
+    node["meta"] >> meta;
+
+    parents = new bool[n*n];
+    const YAML::Node& node_parents = node["parents"];
+    size_t i;
+    int parents_i;
+    for( i = 0; i < n*n; i++ ) {
+        node_parents[i] >> parents_i;
+        parents[i] = (bool)parents_i;
+    }
+
+    P = new kmer_matrix( node["P"] );
+}
+
 motif::motif( size_t n, size_t k, int meta )
     : meta(meta), n(n), k(k)
 {
@@ -311,6 +347,9 @@ void motif::to_yaml( YAML::Emitter& out ) const
 
     out << YAML::Key   << "k";
     out << YAML::Value << k;
+
+    out << YAML::Key   << "meta";
+    out << YAML::Value << meta;
 
     out << YAML::Key << "parents";
     out << YAML::Value;
@@ -711,16 +750,18 @@ void train_motifs( motif& M0, motif& M1,
     l = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-    log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
+    //log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
 
 
+    size_t round = 0;
 
     while( true ) {
+        round++;
+
+        log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round, ic_curr );
+
         ic_best = GSL_NEGINF;
         j_best = i_best = 0;
-
-        log_puts( LOG_MSG, "trying edges ... \n" );
-        log_indent();
 
         for( j = 0; j < M0.n; j++ ) {
 
@@ -732,14 +773,13 @@ void train_motifs( motif& M0, motif& M1,
 
 
             for( i = i_start; i <= j; i++ ) {
+                log_puts( LOG_MSG, "." );
+
                 if( M0.has_edge( i, j ) ) {
-                    log_printf( LOG_MSG, "edge (%zu, %zu): edge exists\n", i, j );
                     continue;
                 }
 
                 if( M0.num_parents(j) >= M0.k ) {
-                    log_printf( LOG_MSG, "edge (%zu, %zu): %zu already has %zu parents\n",
-                                i, j, j, M0.num_parents(j) );
                     continue;
                 }
 
@@ -770,8 +810,6 @@ void train_motifs( motif& M0, motif& M1,
                 l        = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
-                log_printf( LOG_MSG, "edge (%zu, %zu): l = %0.4e, k = %0.0e, ic = %0.4e\n",
-                                      i, j, l, n_params, ic );
 
                 if( ic > ic_best ) {
                     ic_best = ic;
@@ -800,8 +838,7 @@ void train_motifs( motif& M0, motif& M1,
             }
         }
 
-        log_printf( LOG_MSG, "best edge (%zu, %zu): ic = %0.4e\n",
-                              i_best, j_best, ic_best );
+        log_puts( LOG_MSG, "\n" );
 
         if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
 
@@ -819,7 +856,6 @@ void train_motifs( motif& M0, motif& M1,
         gsl_vector_add( l0, &gsl_matrix_column( L0, j_best ).vector );
         gsl_vector_add( l1, &gsl_matrix_column( L1, j_best ).vector );
 
-        log_unindent();
     }
 
 
@@ -837,7 +873,6 @@ void train_motifs( motif& M0, motif& M1,
 
 
     log_unindent();
-    log_puts( LOG_MSG, "done.\n" );
 }
 
 
@@ -920,15 +955,15 @@ void train_motifs_backwards( motif& M0, motif& M1,
     l = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-    log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
-
+    size_t round = 0;
 
     while( true ) {
+        round++;
+
+        log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round, ic_curr );
+
         ic_best = GSL_NEGINF;
         j_best = i_best = 0;
-
-        log_puts( LOG_MSG, "trying edges ... \n" );
-        log_indent();
 
         for( j = 0; j < M0.n; j++ ) {
 
@@ -936,6 +971,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
             i_last = M0.num_parents(j) > 1 ? j-1 : j;
 
             for( i = 0; i <= i_last; i++ ) {
+                log_puts( LOG_MSG, "." );
+
                 if( !M0.has_edge( i, j ) ) continue;
 
                 /* keep track of the old parameters to avoid retraining */
@@ -965,8 +1002,6 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 l        = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
-                log_printf( LOG_MSG, "edge (%zu, %zu): l = %0.4e, k = %0.0e, ic = %0.4e\n",
-                                      i, j, l, n_params, ic );
 
                 if( ic > ic_best ) {
                     ic_best = ic;
@@ -994,8 +1029,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
             }
         }
 
-        log_printf( LOG_MSG, "worst edge (%zu, %zu): ic = %0.4e\n",
-                              i_best, j_best, ic_best );
+        log_puts( LOG_MSG, "\n" );
+
 
         if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
 
@@ -1012,9 +1047,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
         gsl_vector_add( l0, &gsl_matrix_column( L0, j_best ).vector );
         gsl_vector_add( l1, &gsl_matrix_column( L1, j_best ).vector );
-
-        log_unindent();
     }
+
     
 
     gsl_matrix_free( L0 );
@@ -1030,7 +1064,6 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
 
     log_unindent();
-    log_puts( LOG_MSG, "done.\n" );
 }
 
 

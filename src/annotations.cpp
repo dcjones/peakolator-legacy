@@ -2,6 +2,7 @@
 #include "annotations.hpp"
 #include "logger.h"
 
+#include <cstdio>
 #include <cstring>
 #include <set>
 #include <algorithm>

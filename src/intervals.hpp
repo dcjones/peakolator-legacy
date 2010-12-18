@@ -4,9 +4,11 @@
 #define PEAKOLATOR_INTERVAL
 
 #include "common.hpp"
+#include "mpfr_bindings.hpp"
 
 #include <deque>
 #include <queue>
+
 
 
 /* subinterval: an interval with relative coordinates and no strand or

@@ -26,6 +26,7 @@
 #define PEAKOLATOR_PVAL
 
 #include "common.hpp"
+#include "mpfr_bindings.hpp"
 
 #include <nlopt.h>
 

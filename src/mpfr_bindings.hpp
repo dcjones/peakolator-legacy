@@ -28,6 +28,15 @@
 #include <boost/math/bindings/detail/big_digamma.hpp>
 #include <boost/math/bindings/detail/big_lanczos.hpp>
 
+
+inline char* mpfr_to_string( const mpfr_class& x )
+{
+    char* s;
+    mpfr_asprintf( &s, "%.8RNe", x.get_mpfr_t() );
+    return s;
+}
+
+
 inline mpfr_class fabs(const mpfr_class& v)
 {
    return abs(v);

@@ -11,7 +11,6 @@ parameters::parameters()
     , d_max(100000)
     , padj(NULL)
 {
-    mpfr_class::set_dprec(_mpfr_prec_);
 }
 
 
@@ -23,7 +22,6 @@ parameters::parameters( const parameters& p )
     , d_max(p.d_max)
 {
     padj = p.padj ? new emppval(*p.padj) : NULL;
-    mpfr_class::set_dprec(_mpfr_prec_);
 }
 
 parameters::~parameters()

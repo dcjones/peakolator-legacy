@@ -21,7 +21,19 @@ OBJ= \
 	samtools/libbam.a \
 	yaml-cpp/libyaml-cpp.a
 
-all : peakolator.so
+SEQBIAS_OBJ= \
+	peakolate-seqbias.o \
+	sequencing_bias.o \
+	common.o \
+	logger.o \
+	superfasthash.o \
+	hash.o \
+	kmers.o \
+	samtools/libbam.a \
+	yaml-cpp/libyaml-cpp.a
+
+
+all : peakolator.so peakolate-seqbias
 
 clean :
 	rm -f ${OBJ}
@@ -37,13 +49,21 @@ clean :
 .cpp.o :
 	g++ ${CPPFLAGS} ${INC} -c $<
 
+peakolator.o : peakolator.cpp
+	g++ ${CPPFLAGS} ${INC} -c $<
 
 # python module
 peakolator.cpp : peakolator.pyx
 	cython --cplus -o $@ $< 
 
+peakolate-seqbias.cpp : peakolate_seqbias.pyx sequencing_bias.pxd sequencing_bias.pxi
+	cython --embed --cplus -o $@ $<
+
 peakolator.so : ${OBJ}
-	g++ ${CPPFLAGS} ${INC} -shared -o $@ $^ ${LIBS}
+	g++ ${CPPFLAGS} ${INC} -shared -o $@ $^ ${GSL_LIBS} ${PY_LIBS} ${MATH_LIBS} -lz
+
+peakolate-seqbias : ${SEQBIAS_OBJ}
+	g++ ${CPPFLAGS} ${INC} -o $@ $^ ${PY_LIBS} ${GSL_LIBS}
 
 samtools/libbam.a :
 	cd samtools ; ${MAKE} libbam.a
@@ -53,3 +73,4 @@ gmpfrxx/libgmpfrxx.a :
 
 yaml-cpp/libyaml-cpp.a :
 	cd yaml-cpp ; ${MAKE} libyaml-cpp.a
+

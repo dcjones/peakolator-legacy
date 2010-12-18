@@ -4,6 +4,7 @@
 #define PEAKOLATOR_DIST
 
 #include "common.hpp"
+#include "mpfr_bindings.hpp"
 #include <gsl/gsl_rng.h>
 
 

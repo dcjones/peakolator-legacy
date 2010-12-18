@@ -5,10 +5,6 @@
 #include <cstdlib>
 #include "samtools/faidx.h"
 
-#include "mpfr_bindings.hpp"
-
-extern const mpfr_prec_t _mpfr_prec_;
-
 
 /* allocate memory, crashing if there is not enough space */
 void* safe_malloc( size_t n );
@@ -17,8 +13,6 @@ typedef long          pos;     /* genomic position */
 typedef unsigned long rcount;  /* read count */
 
 const rcount rcount_nan = (rcount)-1;
-
-char* mpfr_to_string( mpfr_class& );
 
 int nt2num( char c );
 void num2nt( int n, char* nt, int k, bool colorspace = false );

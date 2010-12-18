@@ -48,7 +48,10 @@ void context::set( dataset* dataset, const char* seqname,
 {
     /* determine wether to examine both strand or just one */
     int s, s0, s1;
-    if( strand >= 0 ) s0 = s1 = strand;
+    if( strand >= 0 ) {
+        s0 = strand;
+        s1 = strand;
+    }
     else {
         s0 = 0;
         s1 = 1;

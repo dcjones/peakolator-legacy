@@ -126,15 +126,16 @@ option_list = [
                           dest='annotations', action='append', \
                           metavar='file_name', default=[],
                           help='consider the genes annoteted in gtf file \'file_name\'' ),
-    optparse.make_option( '-B', '--bias-correction', action= 'store', default=None,
-                          type='str', metavar='ref.fasta', dest='ref_fn',
-                          help='perform bias correction using the given reference sequence' ),
-    optparse.make_option( '-L', dest='L', action='store',
-                          default=1, metavar='N', type='int',
-                          help='consider bios up to N nucleotides to the left of the read' ),
-    optparse.make_option( '-R', dest='R', action='store',
-                          default=10, metavar='N', type='int',
-                          help='consider bios up to N nucleotides to the right of the read' ),
+
+    optparse.make_option( '-b', '--bias-correction', action = 'store', default=None,
+                          type='str', metavar='seqbias.yml', dest='bias_fn',
+                          help='perform bias correction using the given model '
+                               '(a reference genome must also be supplied)' ),
+
+    optparse.make_option( '-r', '--reference', action = 'store', default=None,
+                          type='str', metavar='ref.fa', dest='ref_fn',
+                          help='reference genome, needed for bias correction' ),
+
     optparse.make_option( '--skip-intergenic', dest='scan_intergenic',
                           action='store_false', default=True,
                           help='do not scan intergenic regions' ),
@@ -789,10 +790,6 @@ def main():
     msg.write( 'total intronic: %d\n' % total_nt )
 
 
-
-
-
-
     # parameters
     params = peakolator.parameters()
     params.alpha = 0.01
@@ -801,11 +798,24 @@ def main():
 
 
     # load read data, assess sequencing bias
-    data = peakolator.dataset( options.ref_fn, reads_fn, 100000, options.L, options.R, False, 1.0 )
+    bias = None
+    if options.ref_fn is not None and options.bias_fn is not None:
+        msg.write( 'bias correction enabled\n' )
+        bias = peakolator.sequencing_bias()
+        bias.load( options.ref_fn, reads_fn,  options.bias_fn )
+
+    elif options.ref_fn is not None:
+        msg.write( 'warning: bias correction disabled (no reference sequence provided)\n' )
+
+    elif options.bias_fn is not None:
+        msg.write( 'warning: bias correction disabled (no bias model provided)\n' )
+
+    data = peakolator.dataset()
+    data.init( reads_fn, bias )
 
     # train background model
     d_train = 1000
-    n_train = 10000
+    n_train = 5000
     train = random_training_examples( greylist_intergenic, d_train, n_train,
                                       stranded = options.stranded )
     (params.r,params.p) = data.fit_null_distr( train )

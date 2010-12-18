@@ -5,12 +5,14 @@
 
 #include <cmath>
 #include <cctype>
+#include <ctime>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_sf_exp.h>
 #include "samtools/faidx.h"
 
+#include <fstream>
 #include <algorithm>
 using namespace std;
 
@@ -26,6 +28,34 @@ sequencing_bias::sequencing_bias()
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {}
+
+sequencing_bias::sequencing_bias( const char* ref_fn,
+                                  const char* reads_fn,
+                                  const char* model_fn )
+{
+    std::ifstream fin;
+    fin.open( model_fn );
+
+    YAML::Parser parser( fin );
+    YAML::Node doc;
+    parser.GetNextDocument( doc );
+
+    doc["L"] >> L;
+    doc["R"] >> R;
+
+    M0 = new motif( doc["motif0"] );
+    M1 = new motif( doc["motif1"] );
+
+    this->ref_fn = ref_fn ? strdup(ref_fn) : NULL;
+    if( ref_fn ) {
+        ref_f = fai_load(ref_fn);
+        if( ref_f == NULL ) {
+            log_printf( LOG_ERROR, "Can't open fasta file '%s'\n", ref_fn );
+            exit(1);
+        }
+    }
+    else ref_f = NULL;
+}
 
 
 
@@ -128,6 +158,9 @@ void sequencing_bias::build( const char* ref_fn,
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
     log_indent();
 
+    clock_t t0, t1;
+    t0 = clock();
+
     clear();
     gsl_rng* rng = gsl_rng_alloc(gsl_rng_mt19937);
 
@@ -169,8 +202,9 @@ void sequencing_bias::build( const char* ref_fn,
     std::deque<sequence*> training_seqs;
 
 
-
-    const int bg_count = 1; /* sample this many background sequence for each foreground sequence */
+    /* sample this many background sequence for each foreground sequence */
+    const int bg_count = 1;
+    
     int j;
     pos bg_pos;
     pos bg_offset;
@@ -279,7 +313,9 @@ void sequencing_bias::build( const char* ref_fn,
     table_destroy(&T);
     gsl_rng_free(rng);
 
-    save_to_file( "sequencing_bias.yml" );
+    t1 = clock();
+    log_printf( LOG_MSG, "finished in %0.2f seconds\n",
+                         (double)(t1-t0)/(double)CLOCKS_PER_SEC );
 
     log_unindent();
 }

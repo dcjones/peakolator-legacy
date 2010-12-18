@@ -24,6 +24,7 @@ typedef boost::uint16_t kmer;
 class kmer_matrix
 {
     public:
+        kmer_matrix( const YAML::Node& node );
         kmer_matrix( size_t n, size_t k );
         kmer_matrix( const kmer_matrix& );
         void operator=( const kmer_matrix& );
@@ -103,6 +104,7 @@ class sequence
 class motif
 {
     public:
+        motif( const YAML::Node& );
         motif( size_t n, size_t k, int meta );
         motif( const motif& );
         ~motif();

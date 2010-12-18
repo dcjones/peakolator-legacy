@@ -1,12 +1,6 @@
 
 #include "common.hpp"
 #include "logger.h"
-#include <boost/math/bindings/mpfr.hpp>
-
-
-/* this controls the mantissa precision, the exponent precision is fixed at the
- * machine word size */
-const mpfr_prec_t _mpfr_prec_ = 53;
 
 /* faidx stuff */
 #include "samtools/khash.h"
@@ -36,6 +30,7 @@ extern int fseeko(FILE *stream, off_t offset, int whence);
 
 #include <cctype>
 #include <cstring>
+#include <cmath>
 
 /* allocate memory, crashing if there is not enough space */
 void* safe_malloc( size_t n )
@@ -46,15 +41,6 @@ void* safe_malloc( size_t n )
         log_printf( LOG_ERROR, "Insufficient memory (malloc(%d) failed)\n", n );
         exit(EXIT_FAILURE);
     }
-}
-
-
-
-char* mpfr_to_string( mpfr_class& x )
-{
-    char* s;
-    mpfr_asprintf( &s, "%.8RNe", x.get_mpfr_t() );
-    return s;
 }
 
 
