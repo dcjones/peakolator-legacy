@@ -32,6 +32,7 @@ import random
 import bisect
 import Queue
 import multiprocessing
+import argparse
 from Queue           import Empty
 from collections     import defaultdict, namedtuple
 from sys             import argv, stderr, stdout, stdin
@@ -41,12 +42,16 @@ from functools       import partial
 from itertools       import izip
 
 
-
 msg = peakolator.logger()
 
 
+#
+#                           Two Useful Classes
+#                           ------------------
 
-# For debugging. Pretend to be a joinable queue
+
+
+# For debugging: pretend to be a joinable queue.
 class dummy_queue:
 
     def empty(self):
@@ -71,9 +76,7 @@ class dummy_queue:
         pass
 
 
-#
-# This really should exist in the standard library
-#
+# A class to choose items from a list with non-uniform probability.
 class weighted_choice:
     def __init__( self, xs, ws ):
         assert len(xs) == len(ws)
@@ -97,64 +100,10 @@ class weighted_choice:
 
 
 
-#
-# SECTION I: Program Options
-#
-#
-usage = '%prog [options] reads.bam'
-
-option_list = [
-    optparse.make_option( '-v', '--verbose', dest='verbose', action='store_true', \
-                          help='print lots of output', default=False ),
-    optparse.make_option( '-S', '--unstranded', \
-                           dest='stranded', action='store_false', default=True, \
-                           help='reads are not strand specific' ),
-    optparse.make_option( '-p', \
-                           dest='num_procs', action='store', default=1, \
-                           metavar='N', type='int', \
-                           help='number a processes to run concurrently' ),
-    optparse.make_option( '-i', '--ignore',
-                          dest='blacklist', action='append', \
-                          metavar='file_name', default=[],
-                          help='completely ignore all the regions in the given gtf or bed file' ),
-    optparse.make_option( '-I', '--ignore-null', \
-                          dest='greylist', action='append', \
-                          metavar='file_name', default=[],
-                          help='ignore all the regions in the given gtf or bed\n'
-                               'file when training the null model.' ),
-    optparse.make_option( '-a', '--annotation',
-                          dest='annotations', action='append', \
-                          metavar='file_name', default=[],
-                          help='consider the genes annoteted in gtf file \'file_name\'' ),
-
-    optparse.make_option( '-b', '--bias-correction', action = 'store', default=None,
-                          type='str', metavar='seqbias.yml', dest='bias_fn',
-                          help='perform bias correction using the given model '
-                               '(a reference genome must also be supplied)' ),
-
-    optparse.make_option( '-r', '--reference', action = 'store', default=None,
-                          type='str', metavar='ref.fa', dest='ref_fn',
-                          help='reference genome, needed for bias correction' ),
-
-    optparse.make_option( '--skip-intergenic', dest='scan_intergenic',
-                          action='store_false', default=True,
-                          help='do not scan intergenic regions' ),
-    optparse.make_option( '--skip-intronic', dest='scan_intronic',
-                          action='store_false', default=True,
-                          help='do not scan intronic regions' ),
-    optparse.make_option( '--debug', dest='debug_mode',
-                          action='store_true', default=False,
-                          help='run without launching multiple processes (useful for debugging)' )
-
-    ]
-
-
-
-
 
 #
-# SECTION II: Annotation Juggling
-#
+#                           Annotation Juggling
+#                           -------------------
 
 
 gtf_row = namedtuple( 'gtf_row', 'seqname source feature start end ' \
@@ -548,17 +497,77 @@ def get_interval_gaps( intervals, chrom_sizes, stranded ):
     return gaps
 
 
+def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
+    '''
+    Given a big set of regions, choose some random exmaple regions on which
+    to train the null model.
+    '''
+
+
+    # Avoid sampling regions very near to known genes. These regions are always
+    # enriched with reads. So constrict the defined intergenic regions.
+    m = 2000
+
+    regions = defaultdict(list)
+
+    for seqname in orig_regions:
+        for (start,end,strand) in orig_regions[seqname]:
+
+            if not stranded: strand = -1
+
+            if end-start+1 > 2*m+d:
+                regions[seqname].append( (start+m,end-m,strand) )
+
+
+
+    # the idea here is to do true uniform sampling by choosing a chromosome in
+    # proportion to it's length, then choose a region proportionally to it's
+    # length
+
+    seqs = regions.keys()
+    seq_weights = []
+    for seqname in seqs:
+        seq_weights.append( sum( end-start+1 for (start,end,strand) in regions[seqname]) )
+
+    seq_chooser = weighted_choice( seqs, seq_weights )
+
+    region_choosers = {}
+    for seqname in seqs:
+        ws = [ (end-start+1 if end-start+1 >= d else 0) \
+             for (start,end,strand) in regions[seqname] ]
+        region_choosers[seqname] = weighted_choice( regions[seqname], ws )
+
+    train = []
+    while len(train) < n:
+        seqname = seq_chooser.choose()
+        (start,end,strand) = region_choosers[seqname].choose()
+
+        if end-start+1 < d: continue # shouldn't happen, but just in case
+
+        i = int(random.uniform( 0, end-(d-1) ))
+
+        train.append( peakolator.interval( seqname, i, i+(d-1), strand ) )
+
+
+    return train
+
+
+
+
+
 
 
 #
-# SECTION IV: Searching Intergenic Regions
-#
+#                         Scannings 
+#                         ---------
 #
 
-# training the model to randomly selected intergenic regions
+
 def peakolate( region_queue, prediction_queue, data, params ):
-    ''' one peakolator process: take regions off the queue, build the model and
-    scan, pushing predictions onto another queue. '''
+    '''
+    One peakolator process: take regions off the queue, build the model and
+    scan, pushing predictions onto another queue.
+    '''
 
     ctx = peakolator.context()
 
@@ -584,8 +593,10 @@ def peakolate( region_queue, prediction_queue, data, params ):
 
 
 def peakolate_intron( gene_queue, prediction_queue, data, params ):
-    ''' a specialized peakolator process to scan introns, recalibrating the
-    model to the gene's constitutive exons. '''
+    '''
+    A specialized peakolator process to scan introns, recalibrating the
+    model to the gene's constitutive exons.
+    '''
 
     r = params.r
     p = params.p
@@ -641,8 +652,10 @@ def peakolate_intron( gene_queue, prediction_queue, data, params ):
 
 
 def print_predictions( prediction_queue, f_out ):
-    ''' A process that prints any predictions it finds on the queue. This way we
-    get results immediately. '''
+    '''
+    A process that prints any predictions it finds on the queue. This way we
+    get results immediately.
+    '''
 
     for prediction in iter(prediction_queue.get,None):
         (seqname,start,end,strand,pval,name) = prediction
@@ -663,251 +676,169 @@ def print_predictions( prediction_queue, f_out ):
     msg.write( '(print_preditions) process terminated\n' )
 
 
-def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
-    ''' given a big set of regions, choose some random exmaple regions on which
-    to train the null model. '''
+def scan( args, data, chrom_sizes, regions ):
+    '''
+    Scan the intervels in regions, where regions is a dictionary mapping
+    sequence names to tuples of the form (start, end, strand).
+    '''
 
-
-    # Avoid sampling regions very near to known genes. These regions are always
-    # enriched with reads. So constrict the defined intergenic regions.
-
-    m = 5000
-
-    regions = defaultdict(list)
-
-    for seqname in orig_regions:
-        for (start,end,strand) in orig_regions[seqname]:
-
-            if not stranded: strand = -1
-
-            if end-start+1 > 2*m+d:
-                regions[seqname].append( (start+m,end-m,strand) )
-
-
-
-    # the idea here is to do true uniform sampling by choosing a chromosome in
-    # proportion to it's length, then choose a region proportionally to it's
-    # length
-
-    seqs = regions.keys()
-    seq_weights = []
-    for seqname in seqs:
-        seq_weights.append( sum( end-start+1 for (start,end,strand) in regions[seqname]) )
-
-    seq_chooser = weighted_choice( seqs, seq_weights )
-
-    region_choosers = {}
-    for seqname in seqs:
-        ws = [ (end-start+1 if end-start+1 >= d else 0) \
-             for (start,end,strand) in regions[seqname] ]
-        region_choosers[seqname] = weighted_choice( regions[seqname], ws )
-
-    train = []
-    while len(train) < n:
-        seqname = seq_chooser.choose()
-        (start,end,strand) = region_choosers[seqname].choose()
-
-        if end-start+1 < d: continue # shouldn't happen, but just in case
-
-        i = int(random.uniform( 0, end-(d-1) ))
-
-        train.append( peakolator.interval( seqname, i, i+(d-1), strand ) )
-
-
-    return train
-
-
-
-
-
-#
-# SECTION V: Main
-#
-#
-
-def main():
-    opt_parser = optparse.OptionParser( usage = usage, option_list = option_list )
-    (options,args) = opt_parser.parse_args()
-
-    if options.verbose:
-        msg.verbosity( peakolator.LOG_BLAB )
-        msg.write( 'VERBOSE\n', peakolator.LOG_BLAB )
-
-
-    if len(args) == 0:
-        opt_parser.error( 'specify reads file' )
-    if len(args) > 1:
-        opt_parser.error( 'too many arguments given' )
-
-    reads_fn = args[0]
-    if not isfile(reads_fn):
-        msg.write( 'Can\'t open file %s.\n' % reads_fn, peakolator.LOG_ERROR )
-        exit(1)
-
-
-
-    # load annotations
-    chrom_sizes = peakolator.get_chrom_sizes_from_bam( reads_fn )
-
-    blacklist_rows       = reduce( operator.add, map( parse_gtf_bed, options.blacklist ), [] )
-    greylist_rows        = reduce( operator.add, map( parse_gtf_bed, options.greylist ), [] )
-    annotation_rows      = reduce( operator.add, map( parse_gtf_bed, options.annotations ), [] )
-    transcript_extents   = get_transcript_extents( annotation_rows + blacklist_rows )
-    intergenic           = get_interval_gaps( transcript_extents, \
-                                              chrom_sizes, \
-                                              stranded = options.stranded )
-
-    if greylist_rows:
-        greylist_transcript_extents = get_transcript_extents( annotation_rows + \
-                                                              blacklist_rows + \
-                                                              greylist_rows )
-        greylist_intergenic         = get_interval_gaps( greylist_transcript_extents, \
-                                                     chrom_sizes, \
-                                                     stranded = options.stranded )
-    else:
-        greylist_transcript_extents = transcript_extents
-        greylist_intergenic         = intergenic
-
-
-    exons        = get_constitutive_exons  ( annotation_rows + blacklist_rows, options.stranded )
-    introns      = get_constitutive_introns( annotation_rows + blacklist_rows, options.stranded )
-
-
-
-    # compute total intergenic and intronic
-    total_nt = 0
-    for seqname in intergenic:
-        for (start,end,strand) in intergenic[seqname]:
-            total_nt += end-start+1
-
-    msg.write( 'total intergenic: %d\n' % total_nt )
-
-    total_nt = 0
-    for gene_id in introns:
-        for row in introns[gene_id]:
-            total_nt += row.end - row.start + 1
-
-    msg.write( 'total intronic: %d\n' % total_nt )
-
-
-    # parameters
+    # parameters (including a few magic numbers)
     params = peakolator.parameters()
-    params.alpha = 0.01
-    params.d_min = 50
-    params.d_max = 100000
+    params.alpha = 0.01    # significance level
+    params.d_min = 50      # minimum duration
+    params.d_max = 100000  # maximum duration
 
+    d_train = 1000 # duration of training examples
+    n_train = 5000 # number of training examples
 
-    # load read data, assess sequencing bias
-    bias = None
-    if options.ref_fn is not None and options.bias_fn is not None:
-        msg.write( 'bias correction enabled\n' )
-        bias = peakolator.sequencing_bias()
-        bias.load( options.ref_fn, reads_fn,  options.bias_fn )
-
-    elif options.ref_fn is not None:
-        msg.write( 'warning: bias correction disabled (no reference sequence provided)\n' )
-
-    elif options.bias_fn is not None:
-        msg.write( 'warning: bias correction disabled (no bias model provided)\n' )
-
-    data = peakolator.dataset()
-    data.init( reads_fn, bias )
 
     # train background model
-    d_train = 1000
-    n_train = 5000
-    train = random_training_examples( greylist_intergenic, d_train, n_train,
-                                      stranded = options.stranded )
-    (params.r,params.p) = data.fit_null_distr( train )
+    training_examples = random_training_examples( regions, d_train, n_train,
+                                                 stranded = args.stranded )
 
-    # train pvalue model
+    params.r, params.p = data.fit_null_distr( training_examples )
+
+
+    # emperical p-values
     params.build_padj()
 
 
-    # Debugging is sometimes made much easier by not launching more processes,
-    # so here we fake it.
-    if options.debug_mode:
-        msg.write( 'RUNNING IN DEBUG MODE',  peakolator.LOG_MSG )
+    # a single process version with no reporting, to simplify debugging
+    if args.debug:
+        msg.write( 'Warning: scanning in debug mode\n' )
         prediction_queue = dummy_queue()
+        region_queue     = dummy_queue()
 
-        if options.scan_intergenic:
-            region_queue = dummy_queue()
+        for seqname in regions:
+            if seqname not in chrom_sizes: continue
 
-            for seqname in intergenic:
-                if seqname not in chrom_sizes: continue
+            # push all regions
+            for (start,end,strand) in regions[seqname]:
+                if end - start + 1 < params.d_min: continue
 
-                for (start,end,strand) in intergenic[seqname]:
-                    if end - start + 1 < params.d_min: continue
+                region_queue.put( (seqname, start, end, strand) )
 
-                    region_queue.put( (seqname, start, end, strand) )
-                    msg.write( 'put one of length %d\n' % (end-start+1),
-                                peakolator.LOG_BLAB )
+        region_queue.put( None )
+        peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
+        return
 
-            region_queue.put( None )
-            peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
 
-        if options.scan_intronic:
-            gene_queue = dummy_queue()
 
-            for gene_id in set(exons.keys()) & set(introns.keys()):
-                gene_queue.put( (exons[gene_id], introns[gene_id]) )
-                msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
+    # launch process to report hits
+    prediction_queue = JoinableQueue()
+    Process( target = print_predictions,
+             args   = (prediction_queue, stdout) ).start()
 
-            gene_queue.put( None )
-            peakolate_intron( gene_queue, prediction_queue, data.copy(), params.copy() )
 
-    else:
-        # reporting process
-        prediction_queue = JoinableQueue()
-        t = Process( target = print_predictions,
-                     args   = (prediction_queue, stdout) )
+    region_queue  = JoinableQueue()
+    for _ in range(options.num_procs):
+        t = Process( target = peakolate,
+                     args = (region_queue, prediction_queue,
+                             data.copy(), params.copy() ) )
         t.start()
 
 
-        # Phase I: scan intergenic regions
-        if options.scan_intergenic:
-            region_queue     = JoinableQueue()
+    for seqname in regions:
+        if seqname not in chrom_sizes: continue
 
-            for _ in range(options.num_procs):
-                t = Process( target=peakolate,
-                             args=(region_queue, prediction_queue, data.copy(), params.copy() ) )
-                t.start()
+        # push all regions
+        for (start, end, strand) in regions[seqname]:
+            if end - start + 1 < params.d_min: continue
+            regions_queue.put( (seqname, start, end, strand) )
 
-            for seqname in intergenic:
-                if seqname not in chrom_sizes: continue
-
-                for (start,end,strand) in intergenic[seqname]:
-                    if end - start + 1 < params.d_min: continue
-
-                    region_queue.put( (seqname, start, end, strand) )
-                    msg.write( 'put one of length %d\n' % (end-start+1),
-                            peakolator.LOG_BLAB )
-
-            for _ in range(options.num_procs):
-                region_queue.put( None )
-            region_queue.join()
+        # join scaning processes
+        for _ in range(args.num_procs):
+            region_queue.put( None )
+        region_queue.join()
 
 
-        # Phase II: scan intronic regions
-        if options.scan_intronic:
-            gene_queue = JoinableQueue()
-
-            for _ in range(options.num_procs):
-                t = Process( target=peakolate_intron,
-                             args=(gene_queue, prediction_queue, data.copy(), params.copy() ) )
-                t.start()
-
-            for gene_id in set(exons.keys()) & set(introns.keys()):
-                gene_queue.put( (exons[gene_id], introns[gene_id]) )
-                msg.write( 'put gene "%s"\n' % gene_id, peakolator.LOG_BLAB )
-
-            for _ in range(options.num_procs):
-                gene_queue.put( None )
-            gene_queue.join()
-
-
-    prediction_queue.put( None ) # close queue
+    # join reporting process
+    prediction_queue.put( None )
     prediction_queue.close()
+
+
+
+
+def main():
+    desc = 'Given aligned reads, scan the genome for regions ' \
+           'sequenced at a rate beyond low level noise.'
+
+    ap = argparse.ArgumentParser( description = desc )
+
+    ap.add_argument( 'reads_fn', metavar = 'reads.bam',
+                     help = 'aligned reads in bam format, indexed '
+                            'with \'samtools index\'' )
+
+    ap.add_argument( '-v', '--verbose', action='store_true', default = False,
+                     help = 'print a lot of output' )
+
+    ap.add_argument( '-p', '--processes', action='store',
+                     metavar = 'n', type=int, default=1,
+                     help = 'number of processes to use concurrently' )
+
+    ap.add_argument( '-S', '--unstranded', action='store_false',
+                     dest = 'stranded', default = True,
+                     help = 'reads are not strand specific' )
+
+    ap.add_argument( '-b', '--bias-correction', metavar = 'model.yml',
+                     default = None, dest = 'bias_fn',
+                     help = 'perform bias correction using the given model, '
+                            'trained with peakolate-seqbias' )
+
+    ap.add_argument( '-r', '--reference', metavar = 'ref.fasta',
+                     dest = 'ref_fn', default = None,
+                     help = 'reference genome, indexed with \'samtools faidx\', '
+                            'needed for bias correction' )
+
+    ap.add_argument( '--debug', action = 'store_true', default =  False,
+                     help = 'run without launching multiple processes (useful '
+                            'for debugging.)'  )
+
+    args = ap.parse_args()
+
+
+    if args.verbose:
+        msg.verbosity( peakolator.LOG_BLAB )
+        msg.write( 'verbose output enabled\n', peakolator.LOG_BLAB )
+
+
+    # check files
+    for fn in [ args.reads_fn, args.ref_fn, args.bias_fn ]:
+        if fn is not None and not isfile(fn):
+            msg.write( 'Error: can\'t open file %s.\n' % fn, peakolator.LOG_ERROR )
+
+    if not isfile( args.reads_fn + '.bai' ):
+        msg.write( 'Error: {fn} is not indexed. Run: \'samtools '
+                   ' index {fn}\'\n'.format( args.reads_fn ) )
+
+    if args.ref_fn is not None and not isfile( args.ref_fn + '.fai' ):
+        msg.write( 'Error: {fn} is not indexed. Run: \'samtools '
+                   ' faidx {fn\'\n'.format( args.ref_fn ) )
+
+
+
+    # chromosome lengths
+    chrom_sizes = peakolator.get_chrom_sizes_from_bam( args.reads_fn )
+
+
+    # sequencing bias
+    bias = None
+    if args.ref_fn is not None and args.bias_fn is not None:
+        msg.write( 'bias correction enabled\n' )
+        bias = peakolator.sequencing_bias()
+        bias.load( args.ref_fn, args.reads_fn, args.bias_fn )
+
+
+    # dataset
+    data = peakolator.dataset()
+    data.init( args.reads_fn, bias )
+
+
+    # TODO: allow the user to provide genes to ignore
+    blacklist = {}
+
+    whitelist = get_interval_gaps( blacklist, chrom_sizes, stranded = args.stranded )
+    scan( args, data, chrom_sizes, whitelist )
 
 
 

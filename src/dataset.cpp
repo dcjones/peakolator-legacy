@@ -71,7 +71,6 @@ dataset::~dataset()
 {
     bam_index_destroy(reads_index);
     samclose(reads_f);
-    delete bias;
     free(reads_fn);
 }
 
