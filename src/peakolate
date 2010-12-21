@@ -688,8 +688,8 @@ def scan( args, data, chrom_sizes, regions ):
     params.d_min = 50      # minimum duration
     params.d_max = 100000  # maximum duration
 
-    d_train = 1000 # duration of training examples
-    n_train = 10000 # number of training examples
+    d_train = 100 # duration of training examples
+    n_train = 50000 # number of training examples
 
 
     # train background model
@@ -697,8 +697,6 @@ def scan( args, data, chrom_sizes, regions ):
                                                   stranded = args.stranded )
 
     params.r, params.p = data.fit_null_distr( training_examples )
-
-    msg.write( '(r,p) = (%0.4e, %0.4e)\n' % (params.r, params.p) )
 
 
 

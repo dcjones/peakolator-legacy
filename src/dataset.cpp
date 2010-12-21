@@ -9,6 +9,10 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_double.h>
+#include <gsl/gsl_sort_vector.h>
+#include <gsl/gsl_permute_vector.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_math.h>
 
 #include <nlopt.h>
 
@@ -92,13 +96,16 @@ double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
 
         c_i = gsl_matrix_get( CR, i, 0 );
         r_i = gsl_matrix_get( CR, i, 1 );
+
+        if( gsl_isnan( c_i ) || gsl_isnan( r_i ) ) continue;
+
         rr_i = r*r_i;
 
         ll +=   rr_i * log(p)
            +    c_i  * log( 1.0 - p )
            +    gsl_sf_lngamma( rr_i + c_i )
-           -    gsl_sf_lnfact( (unsigned int)c_i )
-           -    gsl_sf_lngamma( rr_i );
+           -    (gsl_sf_lnfact( (unsigned int)c_i )
+           +    gsl_sf_lngamma( rr_i ));
     }
 
     return ll;
@@ -144,6 +151,46 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
                                           C.vector.size, c_mean );
     double r_mean = gsl_stats_mean( R.vector.data, R.vector.stride, R.vector.size );
 
+    /* sort matrix by count */
+    gsl_permutation* ord = gsl_permutation_alloc( is->size() );
+    gsl_sort_vector_index( ord, &gsl_matrix_column( CR, 0 ).vector );
+    gsl_permute_vector( ord, &gsl_matrix_column( CR, 0 ).vector );
+    gsl_permute_vector( ord, &gsl_matrix_column( CR, 1 ).vector );
+    gsl_permutation_free( ord );
+
+    /* remove outliers:
+     * Since the null distribution is fit using random sampling, the
+     * distribution fit is sensitive to the random sample. For example, if we
+     * happen to get a sample overlapping rRNA, our null distribution will be
+     * thrown off. To make the null more consistent from run to run, I throw out
+     * samples with counts far above the expectation.
+     */
+    const double outlier_cutoff = gsl_stats_quantile_from_sorted_data(
+                                     gsl_matrix_column( CR, 0 ).vector.data,
+                                     2, CR->size1, 0.997 );
+    size_t j;
+    for( j = 0; j < CR->size1; j++ ) {
+        if( gsl_matrix_get( CR, j, 0 ) > outlier_cutoff ) {
+            gsl_matrix_set( CR, j, 0, GSL_NAN );
+            gsl_matrix_set( CR, j, 1, GSL_NAN );
+        }
+    }
+
+
+    /* for debugging: output the sampled matrix */
+    /*
+    FILE* f = fopen( "null_sample.tab", "w" );
+    fprintf( f, "count\trate\n" );
+    for( u = 0; (size_t)u < CR->size1; u++ ) {
+        if( gsl_isnan( gsl_matrix_get( CR, u, 0 ) ) ) continue;
+        fprintf( f, "%0.4e\t%0.4e\n",
+                 gsl_matrix_get( CR, u, 0 ),
+                 gsl_matrix_get( CR, u, 1 ) );
+    }
+    fclose(f);
+    */
+
+
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -167,10 +214,11 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
 
     /* initialize with essentially method of moments estimations */
     rp[0] = (c_mean*c_mean) / ((c_var - c_mean)*r_mean);
-    rp[1] = rp[0] / (rp[0]*c_mean);
+    rp[1] = 0.1;
+    //rp[1] = rp[0] / (rp[0]*c_mean);
 
 
-    log_puts( LOG_MSG, "fitting null distribution ... " );
+    log_puts( LOG_MSG, "optimizing ... " );
     log_indent();
 
     double f_opt;
