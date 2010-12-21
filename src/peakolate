@@ -39,7 +39,7 @@ from sys             import argv, stderr, stdout, stdin
 from os.path         import isfile
 from multiprocessing import Process, Queue, JoinableQueue
 from functools       import partial
-from itertools       import izip
+from itertools       import izip, chain
 
 
 msg = peakolator.logger()
@@ -483,7 +483,7 @@ def get_interval_gaps( intervals, chrom_sizes, stranded ):
 
         for s in ((0,1) if stranded else (-1,)):
             prev_end = -1
-            for (start,end,strand) in intervals[seqname]:
+            for (start,end,strand) in sorted(intervals[seqname], key = lambda x: x[0]):
                 if s != -1 and strand != -1 and s != strand: continue
                 if prev_end+1 < start:
                     gaps[seqname].append( (prev_end+1,start-1,s) )
@@ -689,14 +689,17 @@ def scan( args, data, chrom_sizes, regions ):
     params.d_max = 100000  # maximum duration
 
     d_train = 1000 # duration of training examples
-    n_train = 5000 # number of training examples
+    n_train = 10000 # number of training examples
 
 
     # train background model
     training_examples = random_training_examples( regions, d_train, n_train,
-                                                 stranded = args.stranded )
+                                                  stranded = args.stranded )
 
     params.r, params.p = data.fit_null_distr( training_examples )
+
+    msg.write( '(r,p) = (%0.4e, %0.4e)\n' % (params.r, params.p) )
+
 
 
     # emperical p-values
@@ -720,18 +723,21 @@ def scan( args, data, chrom_sizes, regions ):
 
         region_queue.put( None )
         peakolate( region_queue, prediction_queue, data.copy(), params.copy() )
-        return
+
+        predictions = []
+        for prediction in iter(prediction_queue.get,None):
+            predictions.append( prediction )
+
+        return predictions
+
 
 
 
     # launch process to report hits
     prediction_queue = JoinableQueue()
-    Process( target = print_predictions,
-             args   = (prediction_queue, stdout) ).start()
-
 
     region_queue  = JoinableQueue()
-    for _ in range(options.num_procs):
+    for _ in range(args.num_procs):
         t = Process( target = peakolate,
                      args = (region_queue, prediction_queue,
                              data.copy(), params.copy() ) )
@@ -744,18 +750,25 @@ def scan( args, data, chrom_sizes, regions ):
         # push all regions
         for (start, end, strand) in regions[seqname]:
             if end - start + 1 < params.d_min: continue
-            regions_queue.put( (seqname, start, end, strand) )
+            region_queue.put( (seqname, start, end, strand) )
 
-        # join scaning processes
-        for _ in range(args.num_procs):
-            region_queue.put( None )
-        region_queue.join()
+    # join scaning processes
+    for _ in range(args.num_procs):
+        region_queue.put( None )
+    region_queue.join()
 
 
     # join reporting process
     prediction_queue.put( None )
+
+    # return a list of predictions
+    predictions = []
+    for prediction in iter(prediction_queue.get,None):
+        predictions.append( prediction )
+
     prediction_queue.close()
 
+    return predictions
 
 
 
@@ -769,14 +782,18 @@ def main():
                      help = 'aligned reads in bam format, indexed '
                             'with \'samtools index\'' )
 
-    ap.add_argument( '-v', '--verbose', action='store_true', default = False,
+    ap.add_argument( '-i', '--ignore', action = 'append', metavar = 'in.bed/gtf',
+                     default = [],
+                     help = 'regions in BED or GTF format to ignore in the scan')
+
+    ap.add_argument( '-v', '--verbose', action = 'store_true', default = False,
                      help = 'print a lot of output' )
 
-    ap.add_argument( '-p', '--processes', action='store',
-                     metavar = 'n', type=int, default=1,
+    ap.add_argument( '-p', '--processes', action = 'store',
+                     metavar = 'n', dest='num_procs', type=int, default=1,
                      help = 'number of processes to use concurrently' )
 
-    ap.add_argument( '-S', '--unstranded', action='store_false',
+    ap.add_argument( '-S', '--unstranded', action = 'store_false',
                      dest = 'stranded', default = True,
                      help = 'reads are not strand specific' )
 
@@ -834,18 +851,66 @@ def main():
     data.init( args.reads_fn, bias )
 
 
-    # TODO: allow the user to provide genes to ignore
-    blacklist = {}
+    blacklist = get_transcript_extents( reduce( operator.add,
+                                                map( parse_gtf_bed, args.ignore),
+                                                [] ) )
+    predictions = []
 
-    whitelist = get_interval_gaps( blacklist, chrom_sizes, stranded = args.stranded )
-    scan( args, data, chrom_sizes, whitelist )
+    # Iterative Scan
+    # --------------
+    # 1. Exclude regions known to be transcribed.
+    # 2. Train the background model on all other regions.
+    # 3. Scan all other regions.
+    # 4. If new transcribed regions were found, go to (1),
+    #    otherwise halt.
+    #
+    # Two magic numbers prevent this from running unreasonably long:
+    #   At most this many iterations are preformed:
+    iteration_limit   = 5
+    #   Halt if fewer than this many trascribed regions are found:
+    iteration_min_new = 50
 
+
+    for i in range(iteration_limit):
+
+        whitelist = get_interval_gaps( blacklist, chrom_sizes, stranded = args.stranded )
+
+        n = sum( len(rows) for rows in whitelist.itervalues() )
+        m = sum( end - start + 1 for (start,end,_) in chain( *whitelist.itervalues() ) )
+
+        msg.write( '\nIteration %d: %d regions, %d nt\n' % (i+1, n, m) )
+        msg.write( '=======================================\n\n' )
+
+        ps = scan( args, data, chrom_sizes, whitelist )
+
+        msg.write( 'Iteration %d complete: %d regions found.\n' % (i+1, len(ps)))
+
+        predictions.extend( ps )
+        for (seqname,start,end,strand,pval,name) in ps:
+            blacklist[seqname].append( (start,end,strand) )
+
+        if len(ps) < iteration_min_new: break
+
+
+    for (i,prediction) in enumerate(predictions):
+        (seqname,start,end,strand,pval,name) = prediction
+
+        name = '%s-%d' % (name, i+1)
+
+        stdout.write( '{chrom}\t{start}\t{end}\t{name}\t{score}'.format(
+            chrom = seqname,
+            start = start,
+            end   = end+1,   # adjust for end-exclusiveness of bed
+            name  = name,
+            score = pval ) )
+        if strand >= 0:
+            stdout.write( '\t%s' % ('+' if strand == 0 else '-') )
+        stdout.write( '\n' )
 
 
 if __name__ == '__main__':
     main()
     msg.write( 'finished main', peakolator.LOG_BLAB )
-
 
 
 

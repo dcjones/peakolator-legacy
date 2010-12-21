@@ -127,7 +127,8 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     for( i = is->begin(); i != is->end(); i++ ) {
         ctx.set( this, *i );
 
-        gsl_matrix_set( CR, u, 0, max(1.0,(double)ctx.count( 0, ctx.length()-1 )) );
+        //gsl_matrix_set( CR, u, 0, max(1.0,(double)ctx.count( 0, ctx.length()-1 )) );
+        gsl_matrix_set( CR, u, 0, (double)ctx.count( 0, ctx.length()-1 ) );
         gsl_matrix_set( CR, u, 1, (double)ctx.rate( 0, ctx.length()-1 ) );
 
         u++;
@@ -159,7 +160,7 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     nlopt_set_lower_bounds( fmax, lower );
     nlopt_set_upper_bounds( fmax, upper );
     nlopt_set_initial_step( fmax, step_size );
-    nlopt_set_ftol_rel( fmax, 1e-6 );
+    nlopt_set_ftol_rel( fmax, 1e-12 );
     nlopt_set_maxeval( fmax, 5000 );
 
     double rp[2];
