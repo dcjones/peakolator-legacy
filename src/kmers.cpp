@@ -595,8 +595,7 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
 
 
 double eval_likelihood_vectors( const gsl_vector* l0, const gsl_vector* l1,
-                                const gsl_vector* meta0, const gsl_vector* meta1,
-                                gsl_vector* work, gsl_vector* lz )
+                                const int* meta )
 {
     if( l0->size != l1->size ) {
         log_printf( LOG_ERROR, "Mismatching likelihood vectors.\n" );
@@ -607,24 +606,10 @@ double eval_likelihood_vectors( const gsl_vector* l0, const gsl_vector* l1,
     const size_t n = l0->size;
     size_t i;
 
-    for( i = 0; i < n; i++) {
-        gsl_vector_set( lz, i,
-                        -logaddexp( gsl_vector_get( l0, i ),
-                                    gsl_vector_get( l1, i ) ) );
-    }
-
-    /* compute l0 * meta0 + l1 * meta1 + lz */
-    gsl_vector_memcpy( work, l0 );
-    gsl_vector_mul( work, meta0 );
-    gsl_vector_add( lz, work );
-
-    gsl_vector_memcpy( work, l1 );
-    gsl_vector_mul( work, meta1 );
-    gsl_vector_add( lz, work );
-
     l = 0.0;
     for( i = 0; i < n; i++ ) {
-        l += gsl_vector_get( lz, i );
+        l += (meta[i] == 0 ?  gsl_vector_get( l0, i ) : gsl_vector_get( l1, i ))
+          -  logaddexp( gsl_vector_get( l0, i ), gsl_vector_get( l1, i ) );
     }
 
     return l;
@@ -710,21 +695,11 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* 0-1 vectors giving labeling each sequence as foreground or background */
-    gsl_vector* meta0 = gsl_vector_calloc( training_seqs->size() );
-    gsl_vector* meta1 = gsl_vector_calloc( training_seqs->size() );
+    int* meta = new int[ training_seqs->size() ];
 
     for( i = 0; i < training_seqs->size(); i++ ) {
-        if( (*training_seqs)[i]->meta == 0 ) {
-            gsl_vector_set( meta0, i, 1.0 );
-        }
-        else if( (*training_seqs)[i]->meta == 1 ) {
-            gsl_vector_set( meta1, i, 1.0 );
-        }
+        meta[i] = (*training_seqs)[i]->meta;
     }
-
-    /* work vectors */
-    gsl_vector* work = gsl_vector_alloc( training_seqs->size() );
-    gsl_vector* lz   = gsl_vector_alloc( training_seqs->size() );
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
@@ -747,7 +722,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* baseline ic */
-    l = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
+    l = eval_likelihood_vectors( l0, l1, meta );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
     //log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
@@ -807,7 +782,7 @@ void train_motifs( motif& M0, motif& M1,
                 gsl_vector_add( l1, &gsl_matrix_column( L1, j ).vector );
 
 
-                l        = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
+                l        = eval_likelihood_vectors( l0, l1, meta );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -860,14 +835,11 @@ void train_motifs( motif& M0, motif& M1,
 
 
 
+    delete[] meta;
     gsl_matrix_free( L0 );
     gsl_matrix_free( L1 );
-    gsl_vector_free( meta0 );
-    gsl_vector_free( meta1 );
     gsl_vector_free( l0 );
     gsl_vector_free( l1 );
-    gsl_vector_free( lz );
-    gsl_vector_free( work );
     gsl_vector_free( c0 );
     gsl_vector_free( c1 );
 
@@ -910,21 +882,11 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
 
     /* 0-1 vectors giving labeling each sequence as foreground or background */
-    gsl_vector* meta0 = gsl_vector_calloc( training_seqs->size() );
-    gsl_vector* meta1 = gsl_vector_calloc( training_seqs->size() );
+    int* meta = new int[ training_seqs->size() ];
 
     for( i = 0; i < training_seqs->size(); i++ ) {
-        if( (*training_seqs)[i]->meta == 0 ) {
-            gsl_vector_set( meta0, i, 1.0 );
-        }
-        else if( (*training_seqs)[i]->meta == 1 ) {
-            gsl_vector_set( meta1, i, 1.0 );
-        }
+        meta[i] = (*training_seqs)[i]->meta;
     }
-
-    /* work vectors */
-    gsl_vector* work = gsl_vector_alloc( training_seqs->size() );
-    gsl_vector* lz   = gsl_vector_alloc( training_seqs->size() );
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
@@ -952,7 +914,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
     double l; 
 
     /* baseline ic */
-    l = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
+    l = eval_likelihood_vectors( l0, l1, meta );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
     size_t round = 0;
@@ -999,7 +961,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 gsl_vector_add( l1, &gsl_matrix_column( L1, j ).vector );
 
                 /* evaluate likelihood / ic */
-                l        = eval_likelihood_vectors( l0, l1, meta0, meta1, work, lz );
+                l        = eval_likelihood_vectors( l0, l1, meta );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -1051,14 +1013,11 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
     
 
+    delete[] meta;
     gsl_matrix_free( L0 );
     gsl_matrix_free( L1 );
-    gsl_vector_free( meta0 );
-    gsl_vector_free( meta1 );
     gsl_vector_free( l0 );
     gsl_vector_free( l1 );
-    gsl_vector_free( lz );
-    gsl_vector_free( work );
     gsl_vector_free( c0 );
     gsl_vector_free( c1 );
 
