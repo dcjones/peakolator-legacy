@@ -20,11 +20,12 @@ AC_DEFINE( GSL_RANGE_CHECK_OFF )
 AX_CHECK_ZLIB
                
 # python
+#AM_CHECK_PYTHON_HEADERS
+#AX_PYTHON_DEVEL( ">= '2.6'" )
 AM_PATH_PYTHON( 2.6 )
 AM_CHECK_PYTHON_HEADERS
-
-
-# TODO: various python modules
+AX_PYTHON_MODULE( numpy, 1 )
+AX_PYTHON_MODULE( argparse, 1 )
 
 # cython
 AM_CHECK_CYTHON

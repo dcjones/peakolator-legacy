@@ -32,6 +32,25 @@ libbam_la_SOURCES = bgzf.c \
 					bam2bcf.c \
 					errmod.c \
 					sample.c \
+					bam2bcf.h \
+					bam_endian.h \
+					bam.h \
+					bam_maqcns.h \
+					bgzf.h \
+					errmod.h \
+					faidx.h \
+					glf.h \
+					kaln.h \
+					khash.h \
+					klist.h \
+					knetfile.h \
+					kseq.h \
+					ksort.h \
+					kstring.h \
+					razf.h \
+					sam.h \
+					sam_header.h \
+					sample.h \
 					bcftools/bcf.c \
 					bcftools/vcf.c \
 					bcftools/bcfutils.c \
@@ -40,7 +59,10 @@ libbam_la_SOURCES = bgzf.c \
 					bcftools/kfunc.c \
 					bcftools/index.c \
 					bcftools/fet.c \
-					bcftools/bcf2qcall.c
+					bcftools/bcf2qcall.c \
+					bcftools/bcf.h \
+					bcftools/prob1.h
+
 
 libbam_la_CFLAGS = -D_USE_KNETFILE
 
