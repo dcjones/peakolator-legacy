@@ -1,6 +1,7 @@
 
 AC_INIT( [peakolator], [0.1], [dcjones@cs.washington.edu] )
 AM_INIT_AUTOMAKE( [foreign -Wall -Werror] )
+m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
 AC_CONFIG_MACRO_DIR( [m4] )
 
@@ -20,12 +21,10 @@ AC_DEFINE( GSL_RANGE_CHECK_OFF )
 AX_CHECK_ZLIB
                
 # python
-#AM_CHECK_PYTHON_HEADERS
-#AX_PYTHON_DEVEL( ">= '2.6'" )
-AM_PATH_PYTHON( 2.6 )
-AM_CHECK_PYTHON_HEADERS
+AX_PYTHON_DEVEL( [>= '2.6'] ) 
 AX_PYTHON_MODULE( numpy, 1 )
 AX_PYTHON_MODULE( argparse, 1 )
+
 
 # cython
 AM_CHECK_CYTHON
