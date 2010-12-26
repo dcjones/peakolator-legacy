@@ -16,6 +16,19 @@ AC_PROG_LIBTOOL
 AC_DEFINE( _FILE_OFFSET_BITS, 64 )
 AC_DEFINE( GSL_RANGE_CHECK_OFF )
 
+# optimization flags
+opt_CFLAGS="-O3 -ffast-math"
+dbg_CFLAGS="-O0 -g"
+
+AC_ARG_ENABLE([debug],
+              [AS_HELP_STRING([--enable-debug],
+	                      [enable debugging info (default is no)])],
+              [], [enable_debug=no])
+
+AS_IF([test "x$enable_debug" = xyes],
+      [CFLAGS="$dbg_CFLAGS"],
+      [CFLAGS="$opt_CFLAGS"])
+
 
 # zlib
 AX_CHECK_ZLIB
@@ -49,7 +62,6 @@ AC_CHECK_LIB(nlopt, nlopt_create, , [AC_MSG_ERROR(
 [NLopt not found, see http://ab-initio.mit.edu/wiki/index.php/NLopt])])
 
 
-# TODO: make sure large file support is turned on
 
 AC_CONFIG_FILES( [Makefile
                   src/Makefile

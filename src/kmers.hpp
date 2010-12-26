@@ -27,20 +27,18 @@ class kmer_matrix
         kmer_matrix( const YAML::Node& node );
         kmer_matrix( size_t n, size_t k );
         kmer_matrix( const kmer_matrix& );
+        ~kmer_matrix();
+
         void operator=( const kmer_matrix& );
+        double& operator()( size_t i, size_t j );
 
         void to_yaml( YAML::Emitter& out ) const;
 
-        size_t n() const;
-        size_t m() const;
-
-        ~kmer_matrix();
-        double get( size_t i, kmer K ) const;
-        void   set( size_t i, kmer K, double x );
-        void   inc( size_t i, kmer K, double x = 1.0 );
         void   setall( double x );
         void   setrow( size_t i, double x );
 
+        size_t getn() const;
+        size_t getm() const;
 
 
         /* normalize to turn each position into a proper distribution over kmers
@@ -62,9 +60,11 @@ class kmer_matrix
     private:
 
         size_t k;
-        gsl_matrix* A;
+        
+        size_t n, m;
+        double* A;
 
-        gsl_vector* stored_row;
+        double* stored_row;
         size_t stored_row_index;
 };
 

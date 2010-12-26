@@ -1,5 +1,5 @@
 
-SUBDIRS=gmpfrxx samtools yaml-cpp
+SUBDIRS=gsl gmpfrxx samtools yaml-cpp
 
 dist_bin_SCRIPTS = peakolate peakolate-seqbias
 bin_PROGRAMS = peakolate-seqbias
@@ -27,14 +27,15 @@ peakolator_la_SOURCES = hash.h              hash.c \
 
 peakolator_la_CPPFLAGS = $(PYTHON_CPPFLAGS)
 peakolator_la_LDFLAGS = -module -avoid-version
-peakolator_la_LIBADD = gmpfrxx/libgmpfrxx.la \
+peakolator_la_LIBADD = gsl/libgsl.la \
+					   gmpfrxx/libgmpfrxx.la \
 					   samtools/libbam.la \
 					   yaml-cpp/libyaml-cpp.la \
 					   -lz \
-					   -lgmp \
-					   -lmpfr \
 					   -lgsl \
 					   -lgslcblas \
+					   -lgmp \
+					   -lmpfr \
 					   -lnlopt
 
 

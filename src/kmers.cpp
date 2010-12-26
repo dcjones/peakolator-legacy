@@ -9,57 +9,66 @@
 
 kmer_matrix::kmer_matrix( const YAML::Node& node )
 {
-    size_t size1, size2;
     node["k"] >> k;
 
-    node["size1"] >> size1;
-    node["size2"] >> size2;
+    node["n"] >> n;
+    node["m"] >> m;
 
-    A = gsl_matrix_alloc( size1, size2 );
+    A = new double[ n * m ];
 
     const YAML::Node& node_A = node["A"];
     size_t i;
-    for( i = 0; i < size1*size2; i++ ) {
-        node_A[i] >> A->data[i];
+    for( i = 0; i < n*m; i++ ) {
+        node_A[i] >> A[i];
     }
 
-    stored_row = gsl_vector_alloc( size2 );
+    stored_row = new double[ m ];
 }
 
 kmer_matrix::kmer_matrix( size_t n, size_t k )
-    : k(k)
+    : k(k), n(n)
 {
-    size_t four_to_k = 1<<(2*k);
-    A = gsl_matrix_alloc( n, four_to_k );
-    stored_row = gsl_vector_alloc( four_to_k );
+    m = 1<<(2*k); /* == 4^k */
+
+    A = new double[ n * m ];
+    stored_row = new double[ m ];
 }
 
 kmer_matrix::kmer_matrix( const kmer_matrix& M )
 {
     k = M.k;
 
-    A = gsl_matrix_alloc( M.A->size1, M.A->size2 );
-    stored_row = gsl_vector_alloc( M.stored_row->size );
+    n = M.n;
+    m = M.m;
+    A = new double[ n * m ];
+    memcpy( (void*)A, (void*)M.A, n * m * sizeof(double) );
 
-    gsl_matrix_memcpy( A, M.A );
-    gsl_vector_memcpy( stored_row, M.stored_row );
+
+    stored_row = new double[ m ];
+    memcpy( (void*)stored_row, (void*)M.stored_row, m * sizeof(double) );
 }
 
+size_t kmer_matrix::getn() const { return n; }
+size_t kmer_matrix::getm() const { return m; }
 
 void kmer_matrix::operator=( const kmer_matrix& M )
 {
     k = M.k;
 
-    if( A->size1 != M.A->size1 || A->size2 != M.A->size2 ) {
-        gsl_matrix_free(A);
-        A = gsl_matrix_alloc( M.A->size1,  M.A->size2 );
+    if( n != M.n || m != M.m ) {
 
-        gsl_vector_free(stored_row);
-        stored_row = gsl_vector_alloc( M.stored_row->size );
+        n = M.n;
+        m = M.m;
+
+        delete[] A;
+        A = new double[ n * m ];
+
+        delete[] stored_row;
+        stored_row = new double[ m ];
     }
 
-    gsl_matrix_memcpy( A, M.A );
-    gsl_vector_memcpy( stored_row, M.stored_row );
+    memcpy( (void*)A, (void*)M.A, n * m * sizeof(double) );
+    memcpy( (void*)stored_row, (void*)M.stored_row, m * sizeof(double) );
 }
 
 
@@ -69,17 +78,17 @@ void kmer_matrix::to_yaml( YAML::Emitter& out ) const
 
     out << YAML::Key   << "k";
     out << YAML::Value << k;
-    out << YAML::Key   << "size1";
-    out << YAML::Value << A->size1;
-    out << YAML::Key   << "size2";
-    out << YAML::Value << A->size2;
+    out << YAML::Key   << "n";
+    out << YAML::Value << n;
+    out << YAML::Key   << "m";
+    out << YAML::Value << m;
     out << YAML::Key   << "A";
     out << YAML::Flow;
     out << YAML::Value;
     out << YAML::BeginSeq;
     size_t i;
-    for( i = 0; i < A->size1 * A->size2; i++ ) {
-        out << A->data[i];
+    for( i = 0; i < n * m; i++ ) {
+        out << A[i];
     }
     out << YAML::EndSeq;
 
@@ -87,52 +96,30 @@ void kmer_matrix::to_yaml( YAML::Emitter& out ) const
 }
 
 
-size_t kmer_matrix::n() const
-{
-    return A->size1;
-}
-
-size_t kmer_matrix::m() const
-{
-    return A->size2;
-}
-
-
 kmer_matrix::~kmer_matrix()
 {
-    gsl_matrix_free(A);
-    gsl_vector_free(stored_row);
+    delete[] A;
+    delete[] stored_row;
 }
 
 
-double kmer_matrix::get( size_t i, kmer K ) const
+double& kmer_matrix::operator()( size_t i, size_t j )
 {
-    return gsl_matrix_get( A, i, K );
-}
-
-
-void kmer_matrix::set( size_t i, kmer K, double x )
-{
-    gsl_matrix_set( A, i, K, x );
-}
-
-
-void kmer_matrix::inc( size_t i, kmer K, double x )
-{
-    gsl_matrix_set( A, i, K, gsl_matrix_get( A, i, K ) + x );
+    return A[ i * m + j ];
 }
 
 
 void kmer_matrix::setall( double x )
 {
-    gsl_matrix_set_all( A, x );
+    size_t i;
+    for( i = 0; i < n * m; i++ ) A[i] = x;
 }
 
 void kmer_matrix::setrow( size_t i, double x )
 {
     size_t j;
-    for( j = 0; j < A->size2; j++ ) {
-        gsl_matrix_set( A, i, j, x );
+    for( j = 0; j < m; j++ ) {
+        A[ i * m + j ] = x;
     }
 }
 
@@ -140,7 +127,7 @@ void kmer_matrix::setrow( size_t i, double x )
 void kmer_matrix::dist_normalize()
 {
     size_t i;
-    for( i = 0; i < A->size1; i++ ) {
+    for( i = 0; i < n; i++ ) {
         dist_normalize_row( i );
     }
 }
@@ -148,9 +135,9 @@ void kmer_matrix::dist_normalize()
 void kmer_matrix::dist_normalize_row( size_t i )
 {
     double z = 0.0;
-    kmer K;
-    for( K = 0; K < A->size2; K++ ) z += get( i, K );
-    for( K = 0; K < A->size2; K++ ) set( i, K, get( i, K ) / z );
+    size_t j;
+    for( j = 0; j < m; j++ ) z += A[ i * m + j ];
+    for( j = 0; j < m; j++ ) A[ i * m + j ] /= z;
 }
 
 
@@ -158,7 +145,7 @@ void kmer_matrix::dist_conditionalize( int effective_k )
 {
     size_t i;
 
-    for( i = 0; i < A->size1; i++ ) {
+    for( i = 0; i < n; i++ ) {
         dist_conditionalize_row( i, effective_k );
     }
 }
@@ -166,7 +153,7 @@ void kmer_matrix::dist_conditionalize( int effective_k )
 
 void kmer_matrix::dist_conditionalize_row( size_t i, int effective_k  )
 {
-    if( effective_k <= 0 ) effective_k = A->size2;
+    if( effective_k <= 0 ) effective_k = m;
 
     kmer L;
     kmer L_max = 1 << (2*(effective_k-1));
@@ -177,39 +164,34 @@ void kmer_matrix::dist_conditionalize_row( size_t i, int effective_k  )
     for( L = 0; L < L_max; L++ ) {
         K = L<<2;
         z = 0.0;
-        for( nt = 0; nt < 4; nt++ ) {
-            z += get( i, nt | K );
-        }
-
-        for( nt = 0; nt < 4; nt++ ) {
-            set( i, nt | K, get( i, nt | K ) / z );
-        }
+        for( nt = 0; nt < 4; nt++ ) z += A[ i * m + (nt | K) ];
+        for( nt = 0; nt < 4; nt++ ) A[ i * m + (nt | K) ] /= z;
     }
 }
 
 
 void kmer_matrix::log_transform_row( size_t i, int effective_k )
 {
-    if( effective_k <= 0 ) effective_k = A->size2;
+    if( effective_k <= 0 ) effective_k = m;
     size_t j_max = 1 << (2*effective_k);
 
     size_t j;
     for( j = 0; j < j_max; j++ ) {
-        set( i, j, log( get( i, j ) ) );
+        A[ i * m + j ] = log( A[ i * m + j ] );
     }
 }
 
 
 void kmer_matrix::store_row( size_t i )
 {
-    gsl_matrix_get_row( stored_row, A, i );
+    memcpy( (void*)stored_row, (void*)(A + i * m), m * sizeof(double) );
     stored_row_index = i;
 }
 
 
 void kmer_matrix::restore_stored_row()
 {
-    gsl_matrix_set_row( A, stored_row_index, stored_row );
+    memcpy( (void*)(A + stored_row_index * m), (void*)stored_row, m * sizeof(double) );
 }
 
 
@@ -372,12 +354,12 @@ double motif::eval( const sequence& seq, size_t offset ) const
 {
     double p = 0.0;
 
-    const size_t n = P->n();
+    const size_t n = P->getn();
     size_t i;
     kmer K;
     for( i = 0; i < n; i++ ) {
         if( !seq.get( parents + i*n, n, K, offset ) ) continue;
-        p += P->get( i, K );
+        p += (*P)( i, K );
     }
 
     return p;
@@ -486,12 +468,12 @@ void motif::add_all_edges( const std::deque<sequence*>* data )
         m = 1 << (2*n_parents);
 
         for( K = 0; K < m; K++ ) {
-            P->set( j, K, pseudocount );
+            (*P)( j, K ) = pseudocount;
         }
 
         for( seq = data->begin(); seq != data->end(); seq++ ) {
             if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
-                P->inc( j, K );
+                (*P)( j, K )++;
             }
         }
 
@@ -518,14 +500,14 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
     size_t m = 1 << (2*n_parents);
     kmer K;
     for( K = 0; K < m; K++ ) {
-        P->set( j, K, pseudocount );
+        (*P)( j, K ) = pseudocount;
     }
 
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
         if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
-            P->inc( j, K );
+            (*P)( j, K )++;
         }
     }
 
@@ -550,14 +532,14 @@ void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
     size_t m = 1 << (2*n_parents);
     kmer K;
     for( K = 0; K < m; K++ ) {
-        P->set( j, K, pseudocount );
+        (*P)( j, K ) = pseudocount;
     }
 
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
         if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
-            P->inc( j, K );
+            (*P)( j, K )++;
         }
     }
 
@@ -630,7 +612,7 @@ void motif::update_likelihood_column( gsl_matrix* L, size_t j,
 
     for( i = 0; i < n; i++ ) {
         if( (*training_seqs)[i]->get( parents + j*m, m, K ) ) {
-            gsl_matrix_set( L, i, j, P->get( j, K ) );
+            gsl_matrix_set( L, i, j, (*P)( j, K ) );
         }
     }
 }

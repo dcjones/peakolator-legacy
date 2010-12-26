@@ -6,10 +6,6 @@
 #include <cmath>
 #include <cctype>
 #include <ctime>
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_sf_exp.h>
 #include "samtools/faidx.h"
 
 #include <fstream>
@@ -17,6 +13,11 @@
 using namespace std;
 
 
+/* simply uniform random numbers */
+double rand_uniform( double a, double b )
+{
+    return a + b * (double)rand() / (double)RAND_MAX;
+}
 
 
 /* pseudocount used when sampling foreground and background nucleotide * frequencies */
@@ -162,7 +163,6 @@ void sequencing_bias::build( const char* ref_fn,
     t0 = clock();
 
     clear();
-    gsl_rng* rng = gsl_rng_alloc(gsl_rng_mt19937);
 
     this->ref_fn   = strdup(ref_fn);
     
@@ -265,8 +265,11 @@ void sequencing_bias::build( const char* ref_fn,
         /* add a background sequence */
         /* adjust the current read position randomly, and sample */
         for( j = 0; j < bg_count; j++ ) {
-            bg_offset = (pos)gsl_ran_flat( rng, 100.0, 200.0 );
-            if( gsl_ran_flat( rng, -1.0, 1.0 ) < 0.0 ) bg_offset = -bg_offset;
+
+            /* make things a bit more robust by sampling the background from a
+             * random offset */
+            bg_offset = (pos)rand_uniform( 100.0, 200.0 );
+            if( rand_uniform( -1.0, 1.0 ) < 0.0 ) bg_offset = -bg_offset;
 
             bg_pos = S[i]->pos.pos + bg_offset;
 
@@ -311,7 +314,6 @@ void sequencing_bias::build( const char* ref_fn,
     free(local_seq);
     samclose(reads_f);
     table_destroy(&T);
-    gsl_rng_free(rng);
 
     t1 = clock();
     log_printf( LOG_MSG, "finished in %0.2f seconds\n",
@@ -379,7 +381,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
         L1 = M1->eval( *seq, i );
 
         bias[i] = exp( L1 - L0 );
-        if( !gsl_finite(bias[i]) ) bias[i] = 1.0;
+        if( !isfinite(bias[i]) ) bias[i] = 1.0;
     }
 
     free(seqstr);

@@ -5,7 +5,6 @@
 #include "logger.h"
 
 #include <gsl/gsl_statistics_double.h>
-#include <gsl/gsl_fit.h>
 
 
 template <typename T> T sq( T x ) { return x*x; }

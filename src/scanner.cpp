@@ -12,7 +12,6 @@
 #include <ctime>
 
 #include <gsl/gsl_math.h>
-#include <gsl/gsl_cdf.h>
 #include <nlopt.h>
 
 #include "samtools/sam.h"
