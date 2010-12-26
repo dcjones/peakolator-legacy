@@ -2,7 +2,6 @@
 
 #include "logger.h"
 
-#define _GNU_SOURCE // for vasprintf
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

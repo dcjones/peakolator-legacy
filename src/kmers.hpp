@@ -3,13 +3,11 @@
 #define PEAKOLATOR_KMERS
 
 #include "yaml-cpp/yaml.h"
-#include <boost/cstdint.hpp>
-#include <gsl/gsl_matrix.h>
 #include <deque>
 #include <set>
 
-/* kmers are encoded in 16 bits, allowing for k <= 8 */
-typedef boost::uint16_t kmer;
+/* kmers are encoded in (at least) 16 bits, allowing for k <= 8 */
+typedef unsigned short kmer;
 
 
 /*
@@ -134,7 +132,7 @@ class motif
         void set_edge( size_t i, size_t j, bool );
 
 
-        void update_likelihood_column( gsl_matrix* L, size_t j,
+        void update_likelihood_column( double* L, size_t n, size_t m, size_t j,
                                        const std::deque<sequence*>* training_seqs );
 
         size_t n; /* number of positions */

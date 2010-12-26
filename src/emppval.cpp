@@ -1,10 +1,14 @@
 
 
 #include "emppval.hpp"
+#include "common.hpp"
 #include "scanner.hpp"
 #include "logger.h"
 
+#include <cstdio>
+
 #include <gsl/gsl_statistics_double.h>
+#include <gsl/gsl_matrix.h>
 
 
 template <typename T> T sq( T x ) { return x*x; }

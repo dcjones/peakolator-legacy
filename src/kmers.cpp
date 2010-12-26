@@ -5,7 +5,8 @@
 
 #include <string>
 #include <cstring>
-#include <gsl/gsl_math.h>
+#include <cstdio>
+#include <cmath>
 
 kmer_matrix::kmer_matrix( const YAML::Node& node )
 {
@@ -576,48 +577,100 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
 
 
 
-double eval_likelihood_vectors( const gsl_vector* l0, const gsl_vector* l1,
-                                const int* meta )
+/* Let x_i be the sequence of training example i, c be the class, and M be the
+ * model. Then given l0 and l1, where,
+ *      l0[i] = log P( x_i | c = 0, M )
+ *      l1[i] = log P( x_i | c = 1, M )
+ *
+ * This function computes the log marginal likelihood of M under a flat (50/50)
+ * prior. That is,
+ *
+ *     log P( c_1, c_2, ..., c_n | x_1, x_2, ..., x_n, M )
+ *                      = sum_i log( P( x_i | c_i, M ) / ( P( x_i | c = 0, M ) + P( x_i | c = 1, M ) )
+ *
+ */
+double conditional_likelihood( size_t n, const double* l0, const double* l1, const int* meta )
 {
-    if( l0->size != l1->size ) {
-        log_printf( LOG_ERROR, "Mismatching likelihood vectors.\n" );
-        exit(1);
-    }
-
     double l;
-    const size_t n = l0->size;
     size_t i;
 
     l = 0.0;
     for( i = 0; i < n; i++ ) {
-        l += (meta[i] == 0 ?  gsl_vector_get( l0, i ) : gsl_vector_get( l1, i ))
-          -  logaddexp( gsl_vector_get( l0, i ), gsl_vector_get( l1, i ) );
+        l += (meta[i] == 0 ? l0[i] : l1[i]) - logaddexp( l0[i], l1[i] );
     }
 
     return l;
 }
 
 
-
-
-void motif::update_likelihood_column( gsl_matrix* L, size_t j,
+void motif::update_likelihood_column( double* L, size_t n, size_t m, size_t j,
                                       const std::deque<sequence*>* training_seqs )
 {
     size_t i;
-    const size_t n = L->size1;
-    const size_t m = L->size2;
     kmer K;
 
-    gsl_vector_set_all( &gsl_matrix_column( L, j ).vector, 0.0 );
+    for( i = 0; i < n; i++ ) L[ i * m + j ] = 0.0; /* zero column j */
 
-    for( i = 0; i < n; i++ ) {
-        if( (*training_seqs)[i]->get( parents + j*m, m, K ) ) {
-            gsl_matrix_set( L, i, j, (*P)( j, K ) );
+    for( i = 0; i < n; i++ )  {
+        if( (*training_seqs)[i]->get( parents + j * m, m, K ) ) {
+            L[ i * m + j ] = (*P)( j, K );
         }
     }
 }
 
 
+
+/* copy a matrix column */
+void colcpy( double* dest, const double* src, size_t j, size_t n, size_t m )
+{
+    size_t i;
+    for( i = 0; i < n; i++ ) dest[i] = src[ i * m + j ];
+}
+
+/* vector add */
+void vecadd( double* u, double* v, size_t n )
+{
+    size_t i;
+    for( i = 0; i < n; i++ ) {
+        u[i] += v[i];
+    }
+}
+
+/* vector subtract */
+void vecsub( double* u, double* v, size_t n )
+{
+    size_t i;
+    for( i = 0; i < n; i++ ) {
+        u[i] -= v[i];
+    }
+}
+
+/* add matrix column to vector */
+void vecaddcol( double* u, double* V, size_t n, size_t m, size_t j )
+{
+    size_t i;
+    for( i = 0; i < n; i++ ) {
+        u[i] += V[ i * m + j ];
+    }
+}
+
+/* subtract matrix column from vector */
+void vecsubcol( double* u, double* V, size_t n, size_t m, size_t j )
+{
+    size_t i;
+    for( i = 0; i < n; i++ ) {
+        u[i] -= V[ i * m + j ];
+    }
+}
+
+
+void matsetcol( double* U, double* v, size_t n, size_t m, size_t j )
+{
+    size_t i;
+    for( i = 0 ; i < n; i++ )  {
+        U[ i * m + j ] = v[i];
+    }
+}
 
 
 
@@ -663,61 +716,62 @@ void train_motifs( motif& M0, motif& M1,
     size_t i, j;
     size_t i_start;
 
+    const size_t n = training_seqs->size();
+    const size_t m = M0.n;
+
     /* likelihood matrices: 
      * Lk_ij gives the likelihood of training example i on node j in model k.
      */
-    gsl_matrix* L0 = gsl_matrix_calloc( training_seqs->size(), M0.n );
-    gsl_matrix* L1 = gsl_matrix_calloc( training_seqs->size(), M0.n );
+    double* L0 = new double[ n * m ]; memset( (void*)L0, 0, n * m * sizeof(double) );
+    double* L1 = new double[ n * m ]; memset( (void*)L1, 0, n * m * sizeof(double) );
 
     /* likelihood vectors:
      * summed columns of L0, L1, maintained to minimize redundant computation.
      * */
-    gsl_vector* l0 = gsl_vector_calloc( training_seqs->size() );
-    gsl_vector* l1 = gsl_vector_calloc( training_seqs->size() );
+    double* l0 = new double[ n ]; memset( (void*)l0, 0, n * sizeof(double) );
+    double* l1 = new double[ n ]; memset( (void*)l1, 0, n * sizeof(double) );
 
 
-    /* 0-1 vectors giving labeling each sequence as foreground or background */
-    int* meta = new int[ training_seqs->size() ];
+    /* 0-1 vector giving labeling each sequence as foreground or background */
+    int* meta = new int[ n ];
 
-    for( i = 0; i < training_seqs->size(); i++ ) {
+    for( i = 0; i < n; i++ ) {
         meta[i] = (*training_seqs)[i]->meta;
     }
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
-    gsl_vector* c0 = gsl_vector_alloc( training_seqs->size() );
-    gsl_vector* c1 = gsl_vector_alloc( training_seqs->size() );
+    double* c0 = new double[ n ];
+    double* c1 = new double[ n ];
     
-
 
     /* keeping track of the optimal edge */
     double ic, ic_curr, ic_best;
     size_t j_best, i_best;
+
 
     /* parameters to compute information criterion */
     double n_obs    = training_seqs->size();
     double n_params = M0.num_params() + M1.num_params();
 
 
-    /* log posterier probability */
+    /* log conditional likelihood */
     double l; 
 
 
     /* baseline ic */
-    l = eval_likelihood_vectors( l0, l1, meta );
+    l = conditional_likelihood( n, l0, l1, meta );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-    //log_printf( LOG_MSG, "l = %e, k = %0.0e, ic = %0.4e\n", l, n_params, ic_curr );
 
-
-    size_t round = 0;
+    size_t round_num = 0;
 
     while( true ) {
-        round++;
+        round_num++;
 
-        log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round, ic_curr );
+        log_printf( LOG_MSG, "round_num %4d (ic = %0.4e) ", round_num, ic_curr );
 
-        ic_best = GSL_NEGINF;
+        ic_best = -HUGE_VAL;
         j_best = i_best = 0;
 
         for( j = 0; j < M0.n; j++ ) {
@@ -744,27 +798,29 @@ void train_motifs( motif& M0, motif& M1,
                 M0.store_row(j);
                 M1.store_row(j);
 
+
                 /* keep track of the old likelihoods to avoid reevaluating */
-                gsl_matrix_get_col( c0, L0, j );
-                gsl_matrix_get_col( c1, L1, j );
+                colcpy( c0, L0, j, n, m  );
+                colcpy( c1, L1, j, n, m );
 
                 /* add edge */
                 M0.add_edge( i, j, training_seqs );
                 M1.add_edge( i, j, training_seqs );
 
                 /* evaluate likelihoods for that column */
-                M0.update_likelihood_column( L0, j, training_seqs );
-                M1.update_likelihood_column( L1, j, training_seqs );
+                M0.update_likelihood_column( L0, n, m, j, training_seqs );
+                M1.update_likelihood_column( L1, n, m, j, training_seqs );
+
 
                 /* update training example likelihoods */
-                gsl_vector_sub( l0, c0 );
-                gsl_vector_add( l0, &gsl_matrix_column( L0, j ).vector );
+                vecsub( l0, c0, n );
+                vecaddcol( l0, L0, n, m, j );
 
-                gsl_vector_sub( l1, c1 );
-                gsl_vector_add( l1, &gsl_matrix_column( L1, j ).vector );
+                vecsub( l1, c1, n );
+                vecaddcol( l1, L1, n, m, j );
 
 
-                l        = eval_likelihood_vectors( l0, l1, meta );
+                l        = conditional_likelihood( n, l0, l1, meta );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -784,48 +840,46 @@ void train_motifs( motif& M0, motif& M1,
                 M1.restore_stored_row();
 
                 /* restore previous likelihoods */
-                gsl_vector_sub( l0, &gsl_matrix_column( L0, j ).vector );
-                gsl_vector_add( l0, c0 );
+                vecsubcol( l0, L0, n, m, j );
+                vecadd( l0, c0, n );
 
-                gsl_vector_sub( l1, &gsl_matrix_column( L1, j ).vector );
-                gsl_vector_add( l1, c1 );
+                vecsubcol( l1, L1, n, m, j );
+                vecadd( l1, c1, n );
 
-                gsl_matrix_set_col( L0, j, c0 );
-                gsl_matrix_set_col( L1, j, c1 );
+                matsetcol( L0, c0, n, m, j );
+                matsetcol( L1, c1, n, m, j );
             }
         }
 
         log_puts( LOG_MSG, "\n" );
 
-        if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
+        if( ic_best <= ic_curr || ic_best == -HUGE_VAL ) break;
 
         ic_curr = ic_best;
 
         M0.add_edge( i_best, j_best, training_seqs );
         M1.add_edge( i_best, j_best, training_seqs );
 
-        gsl_vector_sub( l0, &gsl_matrix_column( L0, j_best ).vector );
-        gsl_vector_sub( l1, &gsl_matrix_column( L1, j_best ).vector );
+        vecsubcol( l0, L0, n, m, j_best );
+        vecsubcol( l1, L1, n, m, j_best );
 
-        M0.update_likelihood_column( L0, j_best, training_seqs );
-        M1.update_likelihood_column( L1, j_best, training_seqs );
+        M0.update_likelihood_column( L0, n, m, j_best, training_seqs );
+        M1.update_likelihood_column( L1, n, m, j_best, training_seqs );
 
-        gsl_vector_add( l0, &gsl_matrix_column( L0, j_best ).vector );
-        gsl_vector_add( l1, &gsl_matrix_column( L1, j_best ).vector );
-
+        vecaddcol( l0, L0, n, m, j_best );
+        vecaddcol( l1, L1, n, m, j_best );
     }
 
 
 
     delete[] meta;
-    gsl_matrix_free( L0 );
-    gsl_matrix_free( L1 );
-    gsl_vector_free( l0 );
-    gsl_vector_free( l1 );
-    gsl_vector_free( c0 );
-    gsl_vector_free( c1 );
-
-
+    delete[] L0;
+    delete[] L1;
+    delete[] l0;
+    delete[] l1;
+    delete[] c0;
+    delete[] c1;
+    
     log_unindent();
 }
 
@@ -850,17 +904,20 @@ void train_motifs_backwards( motif& M0, motif& M1,
     size_t i, j;
     size_t i_last;
 
+    const size_t n = training_seqs->size();
+    const size_t m = M0.n;
+
     /* likelihood matrices: 
      * Lk_ij gives the likelihood of training example i on node j in model k.
      */
-    gsl_matrix* L0 = gsl_matrix_calloc( training_seqs->size(), M0.n );
-    gsl_matrix* L1 = gsl_matrix_calloc( training_seqs->size(), M0.n );
+    double* L0 = new double[ n * m ]; memset( (void*)L0, 0, n * m * sizeof(double) );
+    double* L1 = new double[ n * m ]; memset( (void*)L1, 0, n * m * sizeof(double) );
 
     /* likelihood vectors:
      * summed columns of L0, L1, maintained to minimize redundant computation.
      * */
-    gsl_vector* l0 = gsl_vector_calloc( training_seqs->size() );
-    gsl_vector* l1 = gsl_vector_calloc( training_seqs->size() );
+    double* l0 = new double[ n ]; memset( (void*)l0, 0, n * sizeof(double) );
+    double* l1 = new double[ n ]; memset( (void*)l1, 0, n * sizeof(double) );
 
 
     /* 0-1 vectors giving labeling each sequence as foreground or background */
@@ -872,8 +929,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
-    gsl_vector* c0 = gsl_vector_alloc( training_seqs->size() );
-    gsl_vector* c1 = gsl_vector_alloc( training_seqs->size() );
+    double* c0 = new double[ n ];
+    double* c1 = new double[ n ];
     
 
 
@@ -892,11 +949,11 @@ void train_motifs_backwards( motif& M0, motif& M1,
     double n_params = M0.num_params() + M1.num_params();
 
 
-    /* log posterier probability */
+    /* log conditional likelihood */
     double l; 
 
     /* baseline ic */
-    l = eval_likelihood_vectors( l0, l1, meta );
+    l = conditional_likelihood( n, l0, l1, meta );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
     size_t round = 0;
@@ -906,7 +963,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
         log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round, ic_curr );
 
-        ic_best = GSL_NEGINF;
+        ic_best = -HUGE_VAL;
         j_best = i_best = 0;
 
         for( j = 0; j < M0.n; j++ ) {
@@ -924,26 +981,26 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 M1.store_row(j);
 
                 /* keep track of the old likelihoods to avoid reevaluating */
-                gsl_matrix_get_col( c0, L0, j );
-                gsl_matrix_get_col( c1, L1, j );
+                colcpy( c0, L0, j, n, m  );
+                colcpy( c1, L1, j, n, m );
 
                 /* remove edge */
                 M0.remove_edge( i, j, training_seqs );
                 M1.remove_edge( i, j, training_seqs );
 
                 /* evaluate likelihoods for that column */
-                M0.update_likelihood_column( L0, j, training_seqs );
-                M1.update_likelihood_column( L1, j, training_seqs );
+                M0.update_likelihood_column( L0, j, n, m, training_seqs );
+                M1.update_likelihood_column( L1, j, n, m, training_seqs );
 
                 /* update training example likelihoods */
-                gsl_vector_sub( l0, c0 );
-                gsl_vector_add( l0, &gsl_matrix_column( L0, j ).vector );
+                vecsub( l0, c0, n );
+                vecaddcol( l0, L0, n, m, j );
 
-                gsl_vector_sub( l1, c1 );
-                gsl_vector_add( l1, &gsl_matrix_column( L1, j ).vector );
+                vecsub( l1, c1, n );
+                vecaddcol( l1, L1, n, m, j );
 
                 /* evaluate likelihood / ic */
-                l        = eval_likelihood_vectors( l0, l1, meta );
+                l        = conditional_likelihood( n, l0, l1, meta );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -962,47 +1019,46 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 M1.restore_stored_row();
 
                 /* restore previous likelihoods */
-                gsl_vector_sub( l0, &gsl_matrix_column( L0, j ).vector );
-                gsl_vector_add( l0, c0 );
+                vecsubcol( l0, L0, n, m, j );
+                vecadd( l0, c0, n );
 
-                gsl_vector_sub( l1, &gsl_matrix_column( L1, j ).vector );
-                gsl_vector_add( l1, c1 );
+                vecsubcol( l1, L1, n, m, j );
+                vecadd( l1, c1, n );
 
-                gsl_matrix_set_col( L0, j, c0 );
-                gsl_matrix_set_col( L1, j, c1 );
+                matsetcol( L0, c0, n, m, j );
+                matsetcol( L1, c1, n, m, j );
             }
         }
 
         log_puts( LOG_MSG, "\n" );
 
 
-        if( ic_best <= ic_curr || ic_best == GSL_NEGINF ) break;
+        if( ic_best <= ic_curr || ic_best == -HUGE_VAL ) break;
 
         ic_curr = ic_best;
 
         M0.remove_edge( i_best, j_best, training_seqs );
         M1.remove_edge( i_best, j_best, training_seqs );
 
-        gsl_vector_sub( l0, &gsl_matrix_column( L0, j_best ).vector );
-        gsl_vector_sub( l1, &gsl_matrix_column( L1, j_best ).vector );
+        vecsubcol( l0, L0, n, m, j_best );
+        vecsubcol( l1, L1, n, m, j_best );
 
-        M0.update_likelihood_column( L0, j_best, training_seqs );
-        M1.update_likelihood_column( L1, j_best, training_seqs );
+        M0.update_likelihood_column( L0, n, m, j_best, training_seqs );
+        M1.update_likelihood_column( L1, n, m, j_best, training_seqs );
 
-        gsl_vector_add( l0, &gsl_matrix_column( L0, j_best ).vector );
-        gsl_vector_add( l1, &gsl_matrix_column( L1, j_best ).vector );
+        vecaddcol( l0, L0, n, m, j_best );
+        vecaddcol( l1, L1, n, m, j_best );
     }
 
     
 
     delete[] meta;
-    gsl_matrix_free( L0 );
-    gsl_matrix_free( L1 );
-    gsl_vector_free( l0 );
-    gsl_vector_free( l1 );
-    gsl_vector_free( c0 );
-    gsl_vector_free( c1 );
-
+    delete[] L0;
+    delete[] L1;
+    delete[] l0;
+    delete[] l1;
+    delete[] c0;
+    delete[] c1;
 
     log_unindent();
 }
