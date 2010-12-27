@@ -20,10 +20,10 @@ peakolator_la_SOURCES = table.h             table.c \
 						parameters.hpp      parameters.cpp \
 						scanner.hpp         scanner.cpp \
 						sequencing_bias.hpp sequencing_bias.cpp \
-						peakolator.cpp      peakolator.pyx \
-						peakolator.pxd      sequencing_bias.pxd \
-						sequencing_bias.pxi 
+						peakolator.pyx      peakolator.pxd \
+						sequencing_bias.pxd sequencing_bias.pxi 
 
+nodist_peakolator_la_SOURCES = peakolator.cpp
 
 peakolator_la_CPPFLAGS = $(PYTHON_CPPFLAGS)
 peakolator_la_LDFLAGS = -module -avoid-version
@@ -38,7 +38,7 @@ peakolator.cpp : peakolator.pyx
 	cython --cplus -o $@ $^
 
 
-peakolate_seqbias_SOURCES = peakolate_seqbias.pyx peakolate-seqbias.cpp \
+peakolate_seqbias_SOURCES = peakolate_seqbias.pyx \
 							sequencing_bias.pxi sequencing_bias.pxd \
 							sequencing_bias.hpp sequencing_bias.cpp \
 							common.hpp          common.cpp \
@@ -47,6 +47,8 @@ peakolate_seqbias_SOURCES = peakolate_seqbias.pyx peakolate-seqbias.cpp \
 							table.h             table.c \
 							superfasthash.h     superfasthash.c \
 							kmers.hpp           kmers.cpp
+
+nodist_peakolate_seqbias_SOURCES = peakolate-seqbias.cpp
 
 
 peakolate_seqbias_LDADD = samtools/libbam.la \

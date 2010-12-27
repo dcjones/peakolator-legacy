@@ -30,19 +30,12 @@
 
 
 
-Build Intructions
------------------
+Installation Intructions
+------------------------
 
-Make sure you have the prerequisites listed below installed. Then, in theory,
-simply type 'make'.
+Make sure you have the prerequisites listed below installed. Then,
 
-In practice it may be necessary to modify 'config.inc', then type 'make'.
-
-This will build the python module 'peakolator.so' (in the 'src' directory) that is
-required by the program 'peakolate' (also in 'src'), which is responsible for
-actually running the scan. You can put these two files somewhere more
-convenient, once they are built.
-
+./configure && make install
 
 
 Prerequisites
@@ -51,19 +44,18 @@ Prerequisites
 Python (>=2.6) http://www.python.org/
 Cython         http://www.cython.org/
 GSL            http://www.gnu.org/software/gsl/
-GMP            http://gmplib.org/
-MPFR           http://www.mpfr.org/
 NLopt          http://ab-initio.mit.edu/wiki/index.php/NLopt
-Boost          http://www.boost.org/
 
 
 
 Usage
 -----
 
-The script 'peakolate' is responsible for running the command.
+The script 'peakolate' is responsible for performing the scan.
 
-Run, './peakolate --help' for basic instructions.
+Run, 'peakolate --help' for basic instructions.
+
+the sequencing bias model can be trained with 'peakolate-seqbias'.
 
 
 
