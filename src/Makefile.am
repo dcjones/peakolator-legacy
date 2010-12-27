@@ -8,6 +8,7 @@ pyexec_LTLIBRARIES = peakolator.la
 peakolator_la_SOURCES = hash.h              hash.c \
 						logger.h            logger.c \
 						superfasthash.h     superfasthash.c \
+						miscmath.hpp        miscmath.cpp \
 						annotations.hpp     annotations.cpp \
 						common.hpp          common.cpp \
 						context.hpp         context.cpp \
@@ -44,6 +45,7 @@ peakolate_seqbias_SOURCES = peakolate_seqbias.pyx peakolate-seqbias.cpp \
 							sequencing_bias.pxi sequencing_bias.pxd \
 							sequencing_bias.hpp sequencing_bias.cpp \
 							common.hpp          common.cpp \
+							miscmath.hpp        miscmath.cpp \
 							logger.h            logger.c \
 							superfasthash.h     superfasthash.c \
 							hash.h              hash.c \

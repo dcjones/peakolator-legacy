@@ -1,6 +1,7 @@
 
 #include "kmers.hpp"
 #include "common.hpp"
+#include "miscmath.hpp"
 #include "logger.h"
 
 #include <string>
@@ -618,59 +619,6 @@ void motif::update_likelihood_column( double* L, size_t n, size_t m, size_t j,
     }
 }
 
-
-
-/* copy a matrix column */
-void colcpy( double* dest, const double* src, size_t j, size_t n, size_t m )
-{
-    size_t i;
-    for( i = 0; i < n; i++ ) dest[i] = src[ i * m + j ];
-}
-
-/* vector add */
-void vecadd( double* u, double* v, size_t n )
-{
-    size_t i;
-    for( i = 0; i < n; i++ ) {
-        u[i] += v[i];
-    }
-}
-
-/* vector subtract */
-void vecsub( double* u, double* v, size_t n )
-{
-    size_t i;
-    for( i = 0; i < n; i++ ) {
-        u[i] -= v[i];
-    }
-}
-
-/* add matrix column to vector */
-void vecaddcol( double* u, double* V, size_t n, size_t m, size_t j )
-{
-    size_t i;
-    for( i = 0; i < n; i++ ) {
-        u[i] += V[ i * m + j ];
-    }
-}
-
-/* subtract matrix column from vector */
-void vecsubcol( double* u, double* V, size_t n, size_t m, size_t j )
-{
-    size_t i;
-    for( i = 0; i < n; i++ ) {
-        u[i] -= V[ i * m + j ];
-    }
-}
-
-
-void matsetcol( double* U, double* v, size_t n, size_t m, size_t j )
-{
-    size_t i;
-    for( i = 0 ; i < n; i++ )  {
-        U[ i * m + j ] = v[i];
-    }
-}
 
 
 

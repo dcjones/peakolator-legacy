@@ -142,20 +142,6 @@ void seqrc( char* seq, int n )
 
 
 
-double logaddexp( double x, double y )
-{
-    double u = x - y;
-    if( u > 0.0 ) {
-        return x + log1p( exp( -u ) );
-    }
-    else if( u <= 0.0 ) {
-        return y + log1p( exp( u ) );
-    }
-    else {
-        return x + y;
-    }
-}
-
 
 
 /* an array to double encode a sequence as colorspace */

@@ -19,8 +19,6 @@ void num2nt( int n, char* nt, int k, bool colorspace = false );
 void seqlower( char* seq ); /* lowercase */
 void seqrc( char* seq, int n );    /* reverse complement */
 
-double logaddexp( double x, double y );
-
 template <typename T>
 void rev( T* xs, int n ) {
     int i = 0;
