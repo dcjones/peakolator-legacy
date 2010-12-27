@@ -200,8 +200,8 @@ void kmer_matrix::restore_stored_row()
 const size_t sequence::kmer_max_k = 4*sizeof(kmer);
 
 
-sequence::sequence( const char* s, int meta )
-    : meta(meta), xs(NULL), n(0)
+sequence::sequence( const char* s, int c )
+    : c(c), xs(NULL), n(0)
 {
     n = strlen(s);
     if( n > 0 ) {
@@ -220,8 +220,8 @@ sequence::sequence( const char* s, int meta )
 sequence::sequence( const sequence& s )
     : xs(NULL), n(0)
 {
-    meta = s.meta;
-    n    = s.n;
+    c = s.c;
+    n = s.n;
     if( n > 0 ) {
         xs = new kmer[ n/kmer_max_k + 1 ];
         memcpy( xs, s.xs, (n/kmer_max_k + 1)*sizeof(kmer) );
@@ -232,8 +232,8 @@ sequence::sequence( const sequence& s )
 void sequence::operator=( const sequence& s )
 {
     delete[] xs;
-    meta = s.meta;
-    n    = s.n;
+    c = s.c;
+    n = s.n;
     xs = new kmer[ n/kmer_max_k + 1 ];
     memcpy( xs, s.xs, (n/kmer_max_k + 1)*sizeof(kmer) );
 }
@@ -277,7 +277,7 @@ motif::motif( const YAML::Node& node )
 {
     node["n"] >> n;
     node["k"] >> k;
-    node["meta"] >> meta;
+    node["c"] >> c;
 
     parents = new bool[n*n];
     const YAML::Node& node_parents = node["parents"];
@@ -291,8 +291,8 @@ motif::motif( const YAML::Node& node )
     P = new kmer_matrix( node["P"] );
 }
 
-motif::motif( size_t n, size_t k, int meta )
-    : meta(meta), n(n), k(k)
+motif::motif( size_t n, size_t k, int c )
+    : c(c), n(n), k(k)
 {
     P = new kmer_matrix( n, k );
     P->setall( 0.0 );
@@ -305,9 +305,9 @@ motif::motif( size_t n, size_t k, int meta )
 motif::motif( const motif& M )
 {
     P = new kmer_matrix( *M.P );
-    meta = M.meta;
-    n    = M.n;
-    k    = M.k;
+    c = M.c;
+    n = M.n;
+    k = M.k;
 
     parents = new bool[n*n];
     memcpy( parents, M.parents, n*n*sizeof(bool) );
@@ -332,8 +332,8 @@ void motif::to_yaml( YAML::Emitter& out ) const
     out << YAML::Key   << "k";
     out << YAML::Value << k;
 
-    out << YAML::Key   << "meta";
-    out << YAML::Value << meta;
+    out << YAML::Key   << "c";
+    out << YAML::Value << c;
 
     out << YAML::Key << "parents";
     out << YAML::Value;
@@ -474,7 +474,7 @@ void motif::add_all_edges( const std::deque<sequence*>* data )
         }
 
         for( seq = data->begin(); seq != data->end(); seq++ ) {
-            if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
+            if( (*seq)->c == c && (*seq)->get( parents + j*n, n, K ) ) {
                 (*P)( j, K )++;
             }
         }
@@ -508,7 +508,7 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
-        if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
+        if( (*seq)->c == c && (*seq)->get( parents + j*n, n, K ) ) {
             (*P)( j, K )++;
         }
     }
@@ -540,7 +540,7 @@ void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
-        if( (*seq)->meta == meta && (*seq)->get( parents + j*n, n, K ) ) {
+        if( (*seq)->c == c && (*seq)->get( parents + j*n, n, K ) ) {
             (*P)( j, K )++;
         }
     }
@@ -565,10 +565,10 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
     for( i = training_seqs->begin(); i != training_seqs->end(); i++ ) {
         L0 = M0.eval( **i );
         L1 = M1.eval( **i );
-        if( (*i)->meta == 0 ) {
+        if( (*i)->c == 0 ) {
             L += L0 - logaddexp( L0, L1 );
         }
-        else if( (*i)->meta == 1 ) {
+        else if( (*i)->c == 1 ) {
             L += L1 - logaddexp( L0, L1 );
         }
     }
@@ -590,14 +590,14 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
  *                      = sum_i log( P( x_i | c_i, M ) / ( P( x_i | c = 0, M ) + P( x_i | c = 1, M ) )
  *
  */
-double conditional_likelihood( size_t n, const double* l0, const double* l1, const int* meta )
+double conditional_likelihood( size_t n, const double* l0, const double* l1, const int* c )
 {
     double l;
     size_t i;
 
     l = 0.0;
     for( i = 0; i < n; i++ ) {
-        l += (meta[i] == 0 ? l0[i] : l1[i]) - logaddexp( l0[i], l1[i] );
+        l += (c[i] == 0 ? l0[i] : l1[i]) - logaddexp( l0[i], l1[i] );
     }
 
     return l;
@@ -681,16 +681,16 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* 0-1 vector giving labeling each sequence as foreground or background */
-    int* meta = new int[ n ];
+    int* cs = new int[ n ];
 
     for( i = 0; i < n; i++ ) {
-        meta[i] = (*training_seqs)[i]->meta;
+        cs[i] = (*training_seqs)[i]->c;
     }
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
-    double* c0 = new double[ n ];
-    double* c1 = new double[ n ];
+    double* b0 = new double[ n ];
+    double* b1 = new double[ n ];
     
 
     /* keeping track of the optimal edge */
@@ -708,7 +708,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* baseline ic */
-    l = conditional_likelihood( n, l0, l1, meta );
+    l = conditional_likelihood( n, l0, l1, cs );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
 
@@ -748,8 +748,8 @@ void train_motifs( motif& M0, motif& M1,
 
 
                 /* keep track of the old likelihoods to avoid reevaluating */
-                colcpy( c0, L0, j, n, m  );
-                colcpy( c1, L1, j, n, m );
+                colcpy( b0, L0, j, n, m  );
+                colcpy( b1, L1, j, n, m );
 
                 /* add edge */
                 M0.add_edge( i, j, training_seqs );
@@ -761,14 +761,14 @@ void train_motifs( motif& M0, motif& M1,
 
 
                 /* update training example likelihoods */
-                vecsub( l0, c0, n );
+                vecsub( l0, b0, n );
                 vecaddcol( l0, L0, n, m, j );
 
-                vecsub( l1, c1, n );
+                vecsub( l1, b1, n );
                 vecaddcol( l1, L1, n, m, j );
 
 
-                l        = conditional_likelihood( n, l0, l1, meta );
+                l        = conditional_likelihood( n, l0, l1, cs );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -789,13 +789,13 @@ void train_motifs( motif& M0, motif& M1,
 
                 /* restore previous likelihoods */
                 vecsubcol( l0, L0, n, m, j );
-                vecadd( l0, c0, n );
+                vecadd( l0, b0, n );
 
                 vecsubcol( l1, L1, n, m, j );
-                vecadd( l1, c1, n );
+                vecadd( l1, b1, n );
 
-                matsetcol( L0, c0, n, m, j );
-                matsetcol( L1, c1, n, m, j );
+                matsetcol( L0, b0, n, m, j );
+                matsetcol( L1, b1, n, m, j );
             }
         }
 
@@ -820,13 +820,13 @@ void train_motifs( motif& M0, motif& M1,
 
 
 
-    delete[] meta;
+    delete[] cs;
     delete[] L0;
     delete[] L1;
     delete[] l0;
     delete[] l1;
-    delete[] c0;
-    delete[] c1;
+    delete[] b0;
+    delete[] b1;
     
     log_unindent();
 }
@@ -869,16 +869,16 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
 
     /* 0-1 vectors giving labeling each sequence as foreground or background */
-    int* meta = new int[ training_seqs->size() ];
+    int* cs = new int[ training_seqs->size() ];
 
     for( i = 0; i < training_seqs->size(); i++ ) {
-        meta[i] = (*training_seqs)[i]->meta;
+        cs[i] = (*training_seqs)[i]->c;
     }
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
-    double* c0 = new double[ n ];
-    double* c1 = new double[ n ];
+    double* b0 = new double[ n ];
+    double* b1 = new double[ n ];
     
 
 
@@ -901,7 +901,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
     double l; 
 
     /* baseline ic */
-    l = conditional_likelihood( n, l0, l1, meta );
+    l = conditional_likelihood( n, l0, l1, cs );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
     size_t round = 0;
@@ -929,8 +929,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 M1.store_row(j);
 
                 /* keep track of the old likelihoods to avoid reevaluating */
-                colcpy( c0, L0, j, n, m  );
-                colcpy( c1, L1, j, n, m );
+                colcpy( b0, L0, j, n, m  );
+                colcpy( b1, L1, j, n, m );
 
                 /* remove edge */
                 M0.remove_edge( i, j, training_seqs );
@@ -941,14 +941,14 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 M1.update_likelihood_column( L1, j, n, m, training_seqs );
 
                 /* update training example likelihoods */
-                vecsub( l0, c0, n );
+                vecsub( l0, b0, n );
                 vecaddcol( l0, L0, n, m, j );
 
-                vecsub( l1, c1, n );
+                vecsub( l1, b1, n );
                 vecaddcol( l1, L1, n, m, j );
 
                 /* evaluate likelihood / ic */
-                l        = conditional_likelihood( n, l0, l1, meta );
+                l        = conditional_likelihood( n, l0, l1, cs );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -968,13 +968,13 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
                 /* restore previous likelihoods */
                 vecsubcol( l0, L0, n, m, j );
-                vecadd( l0, c0, n );
+                vecadd( l0, b0, n );
 
                 vecsubcol( l1, L1, n, m, j );
-                vecadd( l1, c1, n );
+                vecadd( l1, b1, n );
 
-                matsetcol( L0, c0, n, m, j );
-                matsetcol( L1, c1, n, m, j );
+                matsetcol( L0, b0, n, m, j );
+                matsetcol( L1, b1, n, m, j );
             }
         }
 
@@ -1000,13 +1000,13 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
     
 
-    delete[] meta;
+    delete[] cs;
     delete[] L0;
     delete[] L1;
     delete[] l0;
     delete[] l1;
-    delete[] c0;
-    delete[] c1;
+    delete[] b0;
+    delete[] b1;
 
     log_unindent();
 }

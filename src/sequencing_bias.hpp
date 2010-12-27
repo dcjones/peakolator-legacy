@@ -5,7 +5,7 @@
 
 #include "common.hpp"
 #include "kmers.hpp"
-#include "hash.h"
+#include "table.h"
 
 #include "samtools/sam.h"
 #include "samtools/faidx.h"

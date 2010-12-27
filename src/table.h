@@ -8,15 +8,15 @@
  *
  */
 
-#ifndef PEAKOLATOR_HASH
-#define PEAKOLATOR_HASH
+#ifndef PEAKOLATOR_TABLE
+#define PEAKOLATOR_TABLE
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdint.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include "samtools/sam.h"
 
@@ -67,10 +67,9 @@ void rehash_tail( struct table* T, int32_t q1, int32_t q2 );
 int compare_hashed_pos( const void* x, const void* y );
 
 
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif
-
-

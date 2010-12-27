@@ -7,7 +7,7 @@
  *
  */
 
-#include "hash.h"
+#include "table.h"
 #include "superfasthash.h"
 
 

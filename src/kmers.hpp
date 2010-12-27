@@ -75,7 +75,7 @@ class kmer_matrix
 class sequence
 {
     public:
-        sequence( const char* s, int meta = 0 );
+        sequence( const char* s, int c = 0 );
         sequence( const sequence& );
         void operator=( const sequence& );
         ~sequence();
@@ -83,7 +83,7 @@ class sequence
         kmer get( size_t i ) const;
         bool get( const bool* indexes, size_t maxn, kmer& K, size_t offset = 0 ) const;
 
-        int meta;
+        int c; /* class (i.e. foreground (0) or foreground (1)) */
 
     private:
         kmer* xs;
@@ -103,7 +103,7 @@ class motif
 {
     public:
         motif( const YAML::Node& );
-        motif( size_t n, size_t k, int meta );
+        motif( size_t n, size_t k, int c );
         motif( const motif& );
         ~motif();
 
@@ -123,7 +123,7 @@ class motif
         void restore_stored_row();
         char* print_model_graph( int offset = 0 );
 
-        int meta; /* which subset of the training data to consider */
+        int c; /* which subset of the training data to consider */
 
     private:
 
