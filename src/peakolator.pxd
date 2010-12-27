@@ -41,13 +41,6 @@ cdef extern from "common.hpp":
 
 
 
-cdef extern from 'mpfr_bindings.hpp':
-    ctypedef struct mpfr_class:
-        pass
-
-    char* mpfr_to_string( mpfr_class )
-
-
 cdef extern from "annotations.hpp":
     ctypedef struct rows:
         pass
@@ -70,7 +63,7 @@ cdef extern from "intervals.hpp":
         pos start
         pos end
         int strand
-        mpfr_class pval
+        double score
 
     c_interval* new_interval "new interval" ()
     c_interval* copy_interval "new interval" ( c_interval )

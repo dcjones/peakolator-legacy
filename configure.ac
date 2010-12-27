@@ -43,30 +43,16 @@ AX_PYTHON_MODULE( argparse, 1 )
 # cython
 AM_CHECK_CYTHON
 
-# boost
-AX_BOOST_BASE
-
 # gsl
 AX_PATH_GSL
-
-# gmp
-AC_CHECK_LIB(gmp, __gmpz_init, , [AC_MSG_ERROR(
-[GNU MP not found, see http://swox.com/gmp])])
-
-# mpfr
-AC_CHECK_LIB(mpfr, mpfr_add, , [AC_MSG_ERROR(
-[Need MPFR either from GNU MP 4 or separate MPFR package.
-See http://www.mpfr.org or http://swox.com/gmp])])
 
 # nlopt
 AC_CHECK_LIB(nlopt, nlopt_create, , [AC_MSG_ERROR(
 [NLopt not found, see http://ab-initio.mit.edu/wiki/index.php/NLopt])])
 
 
-
 AC_CONFIG_FILES( [Makefile
                   src/Makefile
-                  src/gmpfrxx/Makefile
                   src/samtools/Makefile
                   src/yaml-cpp/Makefile
                   ])

@@ -16,9 +16,6 @@
 
 #include <nlopt.h>
 
-#include <boost/math/distributions/negative_binomial.hpp>
-
-
 
 using namespace std;
 

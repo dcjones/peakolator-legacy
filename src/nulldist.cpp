@@ -1,10 +1,11 @@
 
 #include "nulldist.hpp"
+#include "miscmath.hpp"
 #include "logger.h"
 
+#include <cmath>
 #include <ctime>
 #include <gsl/gsl_randist.h>
-#include <boost/math/distributions/negative_binomial.hpp>
 
 
 nulldist::nulldist()
@@ -30,18 +31,15 @@ void nulldist::build( double r, double p, int m, int n )
 
     this->p = p;
     this->r = r;
-    A = new mpfr_class[m*n];
-
-    boost::math::negative_binomial_distribution<mpfr_class> dist( 1.0, 1.0 );
+    A = new double[m*n];
 
     int i,j;
     A[0] = 1.0;
     for( i = 1; i < m; i++ ) {
-        dist = boost::math::negative_binomial_distribution<mpfr_class>( (mpfr_class)i, (mpfr_class)p );
 
         A[i*n+0] = 1.0;
         for( j = 1; j < n; j++ ) {
-            A[i*n+j] = boost::math::cdf( boost::math::complement( dist, j-1 ) );
+            A[i*n+j] = lpnbinom( j-1, i, p );
         }
     }
 }
@@ -54,7 +52,7 @@ nulldist::nulldist( const nulldist& y )
 
     m = y.m;
     n = y.n;
-    A = new mpfr_class[m*n];
+    A = new double[m*n];
 
     int i,j;
     for( i = 0; i < m; i++ )  {
@@ -75,7 +73,7 @@ void nulldist::operator=( const nulldist& y )
 
     m = y.m;
     n = y.n;
-    A = new mpfr_class[m*n];
+    A = new double[m*n];
 
     int i,j;
     for( i = 0; i < m; i++ )  {
@@ -94,15 +92,14 @@ nulldist::~nulldist()
 
 
 
-mpfr_class nulldist::QX( double r_i, rcount x_i )
+double nulldist::QX( double r_i, rcount x_i )
 {
     if( x_i == 0 || r*r_i <= 0.0 ) return 1.0;
 
     long int rd = (long int)ceil(r*r_i);
 
     if( A == NULL || rd >= m || x_i >= (rcount)n ) {
-        boost::math::negative_binomial_distribution<mpfr_class> dist( r*r_i, p );
-        return boost::math::cdf( boost::math::complement( dist, x_i-1 ) );
+        return lpnbinom( x_i - 1, r*r_i, p );
     }
     else {
         /* linear interpolation between ceil(r) and floor(r) */

@@ -123,13 +123,9 @@ cdef class interval:
         def __get__( self ): return self.cthis.strand
         def __set__( self, strand ): self.set( strand = strand )
 
-    property pval:
-        def __get__( self ):
-            cdef char* s = mpfr_to_string( self.cthis.pval )
-            py_s = str(s)
-            free(<void*>s)
-
-            return py_s
+    property score:
+        def __get__( self ): return self.cthis.score
+        def __set__( self, score ): self.cthis.score = score
 
 
 

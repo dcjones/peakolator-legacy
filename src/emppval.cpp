@@ -2,13 +2,17 @@
 
 #include "emppval.hpp"
 #include "common.hpp"
+#include "miscmath.hpp"
 #include "scanner.hpp"
 #include "logger.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include <gsl/gsl_statistics_double.h>
 #include <gsl/gsl_matrix.h>
+
+#include <nlopt.h>
 
 
 template <typename T> T sq( T x ) { return x*x; }
@@ -23,45 +27,6 @@ struct gev_fit
 
 
 
-
-
-/*
- *                    The Generalized Extreme Value Distribution
- */
-
-/* Distribution function */
-template <typename T>
-T gev_cdf( T q, const T& loc, const T& scale, const T& shape, bool lowertail = false )
-{
-    T p;
-    q = (q-loc)/scale;
-    if( shape == 0.0 ) p = exp(-exp(-q));
-    else p = exp( -pow( max( 1.0 + shape * q, T(0.0) ), -1.0/shape ) );
-
-    if( lowertail ) p = 1.0 - p;
-    return p;
-}
-
-
-
-/* Log-liklihood */
-template <typename T>
-T gev_ll( const T& x, const T& mu, const T& sigma, const T& xi )
-{
-    T hx;
-    if( sigma <= 0.0 ) return -HUGE_VAL;
-    if( xi == 0.0 ) {
-        hx = (mu - x) / sigma;
-        return -log(sigma) + hx - exp(hx);
-    }
-    else {
-        hx = 1.0 + xi * (x - mu) / sigma;
-        if( hx <= 0  ) return -HUGE_VAL;
-        return -log(sigma) - (1.0 + 1.0/xi) * log(hx) - pow( hx, -1.0/xi );
-    }
-}
-
-
 double gev_objf( unsigned k, const double* theta, double* grad, void* extra )
 {
     gev_fit* gf = (gev_fit*)extra;
@@ -73,10 +38,10 @@ double gev_objf( unsigned k, const double* theta, double* grad, void* extra )
     for( i = 0; i < gf->xs->size1; i++ ) {
         l = gsl_vector_get( gf->ls, i );
         for( j = 0; j < gf->xs->size2; j++ ) {
-            fx += gev_ll( gsl_matrix_get( gf->xs, i, j ),
-                          theta[0] + theta[1] * l,
-                          theta[2],
-                          theta[3] );
+            fx += ldgev( gsl_matrix_get( gf->xs, i, j ),
+                         theta[0] + theta[1] * l,
+                         theta[2],
+                         theta[3] );
         }
     }
 
@@ -127,7 +92,7 @@ emppval::emppval( parameters* params  )
         M = new scanner( params, &ctx );
         for( j = 0; j < m; j++ ) {
             ctx.set_noise( params->dist, l );
-            x = mpfr_class( log( M->least_likely_interval( 0, l-1, 1.0 ).pval ) ).get_d();
+            x = M->least_likely_interval( 0, l-1, 1.0 ).score;
             gsl_matrix_set( gf.xs, i, j, x );
         }
         delete M;
@@ -222,10 +187,10 @@ emppval::~emppval()
 }
 
 
-mpfr_class emppval::adjust( const mpfr_class& pval, pos len ) const
+double emppval::operator() ( double score, pos len ) const
 {
     /* find lerped parameters */
-    mpfr_class mu, sigma, xi;
+    double mu, sigma, xi;
 
     mu    = c_mu[0]    + log((double)len) * c_mu[1];
     sigma = c_sigma[0] + log((double)len) * c_sigma[1];
@@ -235,23 +200,16 @@ mpfr_class emppval::adjust( const mpfr_class& pval, pos len ) const
 
 
     /* adjust */
-    mpfr_class padj = gev_cdf<mpfr_class>( log(pval), mu, sigma, xi );
+    double pval = pgev( score, mu, sigma, xi );
 
-    char *pval_str, *padj_str;
-    mpfr_asprintf( &pval_str, "%.4Re", pval.get_mpfr_t() );
-    mpfr_asprintf( &padj_str, "%.4Re", padj.get_mpfr_t() );
-
-    log_printf( LOG_BLAB, "pvalue adjusted (len = %d): %s  -->  %s\n", len, pval_str, padj_str );
-
-    free(pval_str);
-    free(padj_str);
+    log_printf( LOG_BLAB, "pvalue( %0.4e, %d ) = %0.4e\n", score, len, pval );
 
     /* Never adjust a p-value to make it more significant. This is mainly to
      * avoid strange tail behavior (due to imprecision of the fit) producing 0
      * p-values. */
-    if( padj < pval ) padj = pval;
+    if( log(pval) < score ) pval = exp(score);
 
-    return padj;
+    return pval;
 }
 
 

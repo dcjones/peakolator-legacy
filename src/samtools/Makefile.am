@@ -27,5 +27,5 @@ libbam_la_SOURCES = \
 					sam_header.c \
 					sam_header.h
 
-libbam_la_CFLAGS = -D_USE_KNETFILE
+libbam_la_CFLAGS = -D_USE_KNETFILE -Wno-unused-result -Wno-format
 

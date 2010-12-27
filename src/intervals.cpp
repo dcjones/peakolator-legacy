@@ -2,6 +2,7 @@
 #include "intervals.hpp"
 #include "logger.h"
 
+#include <cstring>
 #include <algorithm>
 
 using namespace std;
@@ -9,48 +10,38 @@ using namespace std;
 
 bool subinterval_ordering::operator()( const subinterval& A, const subinterval& B )
 {
-    if( A.start < B.start ) return true;
+    if( A.start < B.start )       return true;
     else if( A.start == B.start ) return A.end < B.end;
     else                          return false;
 }
 
 
-subinterval::subinterval() : start(-1), end(-1), pval(1.0), count(0), rate(0) {}
+subinterval::subinterval() : start(-1), end(-1), score(0.0), count(0), rate(0) {}
 
-subinterval::subinterval( pos start, pos end, const mpfr_class& pval, rcount count, double rate )
-    : start(start), end(end), pval(pval), count(count), rate(rate) {}
+subinterval::subinterval( pos start, pos end, double score, rcount count, double rate )
+    : start(start), end(end), score(score), count(count), rate(rate) {}
 
 subinterval::subinterval( const subinterval& y )
-    : start(y.start), end(y.end), pval(y.pval), count(y.count), rate(y.rate) {}
+    : start(y.start), end(y.end), score(y.score), count(y.count), rate(y.rate) {}
 
 void subinterval::operator=( const subinterval& y ) { 
-    start = y.start;
-    end   = y.end;
-    pval  = y.pval;
-    count = y.count;
-    rate  = y.rate;
+    start  = y.start;
+    end    = y.end;
+    score  = y.score;
+    count  = y.count;
+    rate   = y.rate;
 }
 
-bool subinterval::operator< ( const subinterval& y ) const { return pval < y.pval; }
-bool subinterval::operator> ( const subinterval& y ) const { return pval > y.pval; }
+bool subinterval::operator< ( const subinterval& y ) const { return score < y.score; }
+bool subinterval::operator> ( const subinterval& y ) const { return score > y.score; }
 
 
-//bool subinterval::operator< ( const subinterval& y ) const
-//{ 
-    //return ((double)count / rate) < ((double)y.count / y.rate);
-//}
-
-//bool subinterval::operator> ( const subinterval& y ) const
-//{ 
-    //return ((double)count / rate) > ((double)y.count / y.rate);
-//}
-
-void subinterval::set( pos start, pos end, const mpfr_class& pval, rcount count, double rate ) {
-    this->start = start;
-    this->end   = end;
-    this->pval  = pval;
-    this->count = count;
-    this->rate  = rate;
+void subinterval::set( pos start, pos end, double score, rcount count, double rate ) {
+    this->start  = start;
+    this->end    = end;
+    this->score  = score;
+    this->count  = count;
+    this->rate   = rate;
 }
 
 pos subinterval::length() const
@@ -81,7 +72,7 @@ subinterval_bound::subinterval_bound()
     , J_max(0)
     , rate(1.0)
     , count(0)
-    , pval(1.0)
+    , score(0.0)
 {
 }
 
@@ -89,11 +80,11 @@ subinterval_bound::subinterval_bound()
 subinterval_bound::subinterval_bound( pos min, pos max,
                                       double rate,
                                       rcount count,
-                                      const mpfr_class& pval )
+                                      double score )
     : I_min(min), I_max(max)
     , J_min(min), J_max(max)
     , rate(rate), count(count)
-    , pval(pval)
+    , score(score)
 {
     check();
 }
@@ -102,11 +93,11 @@ subinterval_bound::subinterval_bound( pos I_min, pos I_max,
                                       pos J_min, pos J_max,
                                       double rate,
                                       rcount count,
-                                      const mpfr_class& pval )
+                                      double score )
     : I_min(I_min), I_max(I_max)
     , J_min(J_min), J_max(J_max)
     , rate(rate), count(count)
-    , pval(pval)
+    , score(score)
 {
     check();
 }
@@ -115,7 +106,7 @@ subinterval_bound::subinterval_bound( const subinterval_bound& y )
     : I_min(y.I_min), I_max(y.I_max)
     , J_min(y.J_min), J_max(y.J_max)
     , rate(y.rate), count(y.count)
-    , pval(y.pval)
+    , score(y.score)
 {
     check();
 }
@@ -129,7 +120,7 @@ void subinterval_bound::operator=( const subinterval_bound& y )
     this->J_max = y.J_max;
     this->rate  = y.rate;
     this->count = y.count;
-    this->pval  = y.pval;
+    this->score  = y.score;
     check();
 }
 
@@ -137,15 +128,15 @@ void subinterval_bound::operator=( const subinterval_bound& y )
 void subinterval_bound::set( pos min, pos max,
           double rate,
           rcount count,
-          const mpfr_class& pval )
+          double score )
 {
-    this->I_min = min;
-    this->I_max = max;
-    this->J_min = min;
-    this->J_max = max;
-    this->rate  = rate;
-    this->count = count;
-    this->pval  = pval;
+    this->I_min  = min;
+    this->I_max  = max;
+    this->J_min  = min;
+    this->J_max  = max;
+    this->rate   = rate;
+    this->count  = count;
+    this->score  = score;
     check();
 }
 
@@ -153,15 +144,15 @@ void subinterval_bound::set( pos min, pos max,
 void subinterval_bound::set( pos I_min, pos I_max, pos J_min, pos J_max,
           double rate,
           rcount count,
-          const mpfr_class& pval )
+          double score )
 {
-    this->I_min = I_min;
-    this->I_max = I_max;
-    this->J_min = J_min;
-    this->J_max = J_max;
-    this->rate  = rate;
-    this->count = count;
-    this->pval  = pval;
+    this->I_min  = I_min;
+    this->I_max  = I_max;
+    this->J_min  = J_min;
+    this->J_max  = J_max;
+    this->rate   = rate;
+    this->count  = count;
+    this->score  = score;
     check();
 }
 
@@ -177,28 +168,33 @@ bool subinterval_bound::equal_bounds() const
     return I_min == J_min && I_max == J_max;
 }
 
-uint64_t subinterval_bound::subinterval_count_equal( pos i, pos j, pos d_min_, pos d_max_ ) const
+/* Count the number of subintervals contained within [i,j], given a min and max
+ * duration of d_min_, d_max_, respectively. */
+double subinterval_bound::subinterval_count_equal( pos i, pos j, pos d_min_, pos d_max_ ) const
 {
-    uint64_t d_min = (uint64_t)d_min_;
-    uint64_t d_max = (uint64_t)d_max_;
+    /* note, this is done with doubles to avoid wrap-around on overflow */
+    double d_min = (double)d_min_;
+    double d_max = (double)d_max_;
 
     if( i > j ) return 0;
-    d_min_ = min<uint64_t>( d_min, 1 );
-    uint64_t n = (uint64_t)(j - i + 1);
+    d_min_ = min<double>( d_min, 1 );
+    double n = (double)(j - i + 1);
 
     if( n < d_min )     return 0;
     if( d_max < d_min ) return 0;
 
-    uint64_t m = min( n, d_max );
+    double m = min( n, d_max );
 
     return (1+n)*(1+m-d_min) - (m*(m+1) - (d_min*(d_min-1))) / 2;
 }
 
 
-size_t subinterval_bound::subinterval_count( pos d_min, pos d_max ) const
+/* Count the number of subintervals contined bounded by this object, given a
+ * min and max duration of d_min and d_max, respectively. */
+double subinterval_bound::subinterval_count( pos d_min, pos d_max ) const
 {
     if( disjoint_bounds() ) {
-        uint64_t T, L, R, C;
+        double T, L, R, C;
         T = subinterval_count_equal( I_min, J_max, d_min, d_max );
         L = subinterval_count_equal( I_min, J_min-1, d_min, d_max );
         R = subinterval_count_equal( I_max+1, J_max, d_min, d_max );
@@ -207,7 +203,7 @@ size_t subinterval_bound::subinterval_count( pos d_min, pos d_max ) const
         return (size_t)(T + C - L - R);
     }
     else if( equal_bounds() ) {
-        return (size_t)subinterval_count_equal( I_min, J_max, d_min, d_max );
+        return subinterval_count_equal( I_min, J_max, d_min, d_max );
     }
     else return 0;
 }
@@ -228,7 +224,7 @@ pos subinterval_bound::subinterval_bound::min_length() const
 bool subinterval_bound_priority::operator()( subinterval_bound*& a,
                                              subinterval_bound*& b )
 {
-    return a->pval > b->pval;
+    return a->score > b->score;
 }
 
 
@@ -283,7 +279,7 @@ interval::interval( const subinterval& i, const char* seqname, pos start, int st
     , start(start+i.start)
     , end(start+i.end)
     , strand(strand)
-    , pval(i.pval)
+    , score(i.score)
 {
 }
 
@@ -292,7 +288,7 @@ interval::interval( const interval& i )
     , start(i.start)
     , end(i.end)
     , strand(i.strand)
-    , pval(i.pval)
+    , score(i.score)
 {
 }
 
@@ -313,11 +309,11 @@ void interval::set( const char* seqname, pos start, pos end, int strand )
 void interval::set( const subinterval& i, const char* seqname, pos start, int strand )
 {
     free(this->seqname);
-    this->seqname = strdup(seqname);
-    this->start   = start+i.start;
-    this->end     = start+i.end;
-    this->strand  = strand;
-    this->pval    = i.pval;
+    this->seqname  = strdup(seqname);
+    this->start    = start+i.start;
+    this->end      = start+i.end;
+    this->strand   = strand;
+    this->score    = i.score;
 }
 
 pos interval::length() const
@@ -356,6 +352,7 @@ subinterval_stack::subinterval_stack()
 
 }
 
+/*
 void subinterval_stack::print( const char* seqname, char strand, pos offset,
                             const char* gene_name )
 {
@@ -363,12 +360,14 @@ void subinterval_stack::print( const char* seqname, char strand, pos offset,
 
     subinterval_stack::iterator i;
     for( i = this->begin(); i != this->end(); i++ ) {
-        mpfr_printf("%s\t%d\t%d\t%s\t%0.8Re\t%c\n",
+        printf("%s\t%d\t%d\t%s\t%0.8e\t%c\n",
                seqname, i->start+offset-1, i->end+offset-1,
-               gene_name, i->pval.get_mpfr_t(), strand );
+               gene_name, i->score, strand );
         fflush(stdout);
     }
 }
+*/
+
 
 
 

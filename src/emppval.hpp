@@ -1,6 +1,6 @@
 
 /*
- * Pvalue adjustments using Monte Carlo methods.
+ * Pvalue calculation using Monte Carlo methods.
  *
  * If a interval of length l is scanned, discovering the most significant
  * scoring region with score s. A p-value is produced according to a model,
@@ -26,9 +26,6 @@
 #define PEAKOLATOR_PVAL
 
 #include "common.hpp"
-#include "mpfr_bindings.hpp"
-
-#include <nlopt.h>
 
 class parameters;
 
@@ -38,16 +35,17 @@ class emppval
         emppval( parameters* params );
         emppval( const emppval& );
         ~emppval();
-        mpfr_class adjust( const mpfr_class&, pos len ) const;
+
+        double operator()( double score, pos len ) const;
 
     private:
         bool fit_gev_to_emperical( double* mu, double* sigma, double* xi );
 
         parameters* params;
 
-        mpfr_class c_mu[2];
-        mpfr_class c_sigma[2];
-        mpfr_class c_xi[2];
+        double c_mu[2];
+        double c_sigma[2];
+        double c_xi[2];
 
         friend double gev_objf( unsigned int, const double*, double*, void* );
 };

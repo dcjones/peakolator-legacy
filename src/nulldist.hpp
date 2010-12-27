@@ -4,7 +4,6 @@
 #define PEAKOLATOR_DIST
 
 #include "common.hpp"
-#include "mpfr_bindings.hpp"
 #include <gsl/gsl_rng.h>
 
 
@@ -25,7 +24,7 @@ class nulldist
 
         void operator=( const nulldist& );
 
-        mpfr_class QX( double r_i, rcount x_i );
+        double QX( double r_i, rcount x_i );
         rcount rand( double r_i );
 
 
@@ -33,9 +32,9 @@ class nulldist
         double r;
         double p;
         parameters* param;
-        int m; /* maximum rate */
-        int n; /* maximum count */
-        mpfr_class* A; /* rate by count */
+        int m;     /* maximum rate */
+        int n;     /* maximum count */
+        double* A; /* rate by count */
 
         /* random number generator */
         gsl_rng* rng;

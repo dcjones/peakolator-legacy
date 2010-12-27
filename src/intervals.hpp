@@ -4,7 +4,6 @@
 #define PEAKOLATOR_INTERVAL
 
 #include "common.hpp"
-#include "mpfr_bindings.hpp"
 
 #include <deque>
 #include <queue>
@@ -19,7 +18,7 @@ class subinterval
 
         subinterval();
         subinterval( pos start, pos end,
-                  const mpfr_class& pval = 1.0,
+                  double score = 0.0,
                   rcount count = 0,
                   double rate  = 1.0 );
 
@@ -30,7 +29,7 @@ class subinterval
         bool operator>( const subinterval& y ) const;
 
         void set( pos start, pos end,
-                  const mpfr_class& pval = 1.0,
+                  double score = 1.0,
                   rcount count = 0,
                   double rate  = 1.0 );
 
@@ -38,7 +37,7 @@ class subinterval
 
         pos start;
         pos end;
-        mpfr_class pval;
+        double     score;
         rcount     count;
         double     rate;
 };
@@ -70,12 +69,12 @@ class subinterval_bound
         subinterval_bound( pos min, pos max,
                            double rate = 1.0,
                            rcount count = 0,
-                           const mpfr_class& pval = 1.0 );
+                           double score = 0.0 );
 
         subinterval_bound( pos I_min, pos I_max, pos J_min, pos J_max,
                            double rate = 1.0,
                            rcount count = 0,
-                           const mpfr_class& pval = 1.0 );
+                           double score = 0.0 );
 
         subinterval_bound( const subinterval_bound& );
 
@@ -84,16 +83,16 @@ class subinterval_bound
         void set( pos min, pos max,
                   double rate = 1.0,
                   rcount count = 0,
-                  const mpfr_class& pval = 1.0 );
+                  double score = 0.0 );
 
         void set( pos I_min, pos I_max, pos J_min, pos J_max,
                   double rate = 1.0,
                   rcount count = 0,
-                  const mpfr_class& pval = 1.0 );
+                  double score = 0.0 );
 
         bool   disjoint_bounds()   const;
         bool   equal_bounds()      const;
-        size_t subinterval_count( pos d_min, pos d_max ) const;
+        double subinterval_count( pos d_min, pos d_max ) const;
 
         pos max_length() const;
         pos min_length() const;
@@ -104,12 +103,12 @@ class subinterval_bound
         pos J_max;
         double     rate;
         rcount     count;
-        mpfr_class pval;
+        double     score;
 
     private:
         void check() const;
 
-        uint64_t subinterval_count_equal( pos i, pos j, pos d_min, pos d_max ) const;
+        double subinterval_count_equal( pos i, pos j, pos d_min, pos d_max ) const;
 };
 
 
@@ -152,7 +151,7 @@ class interval
         char* seqname;
         pos start, end;
         int strand;
-        mpfr_class pval;
+        double score;
 };
 
 class interval_stack : public std::deque<interval>

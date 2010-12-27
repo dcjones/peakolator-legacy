@@ -584,7 +584,7 @@ def peakolate( region_queue, prediction_queue, data, params ):
         for I in M.run():
             prediction_queue.put(
                     (I.seqname, I.start, I.end,
-                     I.strand, I.pval, 'peakolator_intergenic' ) )
+                     I.strand, I.score, 'peakolator_intergenic' ) )
 
         region_queue.task_done()
 
@@ -643,7 +643,7 @@ def peakolate_intron( gene_queue, prediction_queue, data, params ):
             for I in M.run():
                 prediction_queue.put(
                         (I.seqname, I.start, I.end,
-                         I.strand, I.pval, 'peakolator_intronic' ) )
+                         I.strand, I.score, 'peakolator_intronic' ) )
 
 
         gene_queue.task_done()

@@ -26,8 +26,8 @@ void rev( T* xs, int n ) {
     while( i < j ) swap(xs[i++],xs[j--]);
 }
 
-/* Change the behavior of the faidx_fetch_seq function to be more usefull. If
- * coordinates ar outside the actual sequence, write N's, rather than adjusting
+/* Change the behavior of the faidx_fetch_seq function to be more useful. If
+ * coordinates are outside the actual sequence, write N's, rather than adjusting
  * the start,end. */
 char* faidx_fetch_seq_forced_lower( const faidx_t* fai, const char *c_name, int p_beg_i, int p_end_i );
 
