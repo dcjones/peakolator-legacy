@@ -28,14 +28,12 @@ dataset::dataset( const char* reads_fn, sequencing_bias* bias )
 
     reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam file '%s'.", reads_fn );
-        exit(1);
+        failf( "Can't open bam file '%s'.", reads_fn );
     }
 
     reads_index = bam_index_load( reads_fn );
     if( reads_index == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam index '%s.bai'.", reads_fn );
-        exit(1);
+        failf( "Can't open bam index '%s.bai'.", reads_fn );
     }
 
     log_puts( LOG_MSG, "done.\n" );
@@ -53,14 +51,12 @@ dataset* dataset::copy() const
 
     pd->reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam file '%s'.", reads_fn );
-        exit(1);
+        failf( "Can't open bam file '%s'.", reads_fn );
     }
 
     pd->reads_index = bam_index_load( reads_fn );
     if( reads_index == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam index '%s.bai'.", reads_fn );
-        exit(1);
+        failf( "Can't open bam index '%s.bai'.", reads_fn );
     }
 
     pd->reads_fn = strdup(reads_fn);

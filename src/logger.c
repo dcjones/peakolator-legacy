@@ -96,3 +96,25 @@ void log_printf( int vl, const char* fmt, ... )
 
 
 
+void fail( const char* msg )
+{
+    log_puts( LOG_ERROR, msg );
+    exit( EXIT_FAILURE );
+}
+
+
+
+void failf( const char* fmt, ... )
+{
+    va_list ap;
+    va_start( ap, fmt );
+
+    char* outstr;
+    int outstrlen = vasprintf( &outstr, fmt, ap );
+
+    va_end(ap);
+
+    fail( outstr );
+    free( outstr );
+}
+

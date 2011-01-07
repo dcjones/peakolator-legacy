@@ -491,8 +491,7 @@ void motif::add_all_edges( const std::deque<sequence*>* data )
 void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
     if( i > j ) {
-        log_printf( LOG_ERROR, "Invalid motif edge (%zu, %zu)\n", i, j );
-        exit(1);
+        failf( "Invalid motif edge (%zu, %zu)\n", i, j );
     }
 
     set_edge( i, j, true );
@@ -523,8 +522,7 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
     if( i > j ) {
-        log_printf( LOG_ERROR, "Invalid motif edge (%zu, %zu)\n", i, j );
-        exit(1);
+        failf( "Invalid motif edge (%zu, %zu)\n", i, j );
     }
 
     set_edge( i, j, false );
@@ -654,8 +652,7 @@ void train_motifs( motif& M0, motif& M1,
     log_indent();
 
     if( M0.n != M1.n ) {
-        log_printf( LOG_ERROR, "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
-        exit(1);
+        failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
     double (*compute_ic)( double, double, double, double ) = aic;
@@ -843,8 +840,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
 
     if( M0.n != M1.n ) {
-        log_printf( LOG_ERROR, "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
-        exit(1);
+        failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
     double (*compute_ic)( double, double, double, double ) = aic;

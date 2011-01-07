@@ -1,48 +1,11 @@
 
 #include "common.hpp"
 #include "logger.h"
-
-/* faidx stuff */
-#include "samtools/khash.h"
-
-
-#ifndef _NO_RAZF
-#include "samtools/razf.h"
-#else
-#ifdef _WIN32
-#define ftello(fp) ftell(fp)
-#define fseeko(fp, offset, whence) fseek(fp, offset, whence)
-#else
-extern off_t ftello(FILE *stream);
-extern int fseeko(FILE *stream, off_t offset, int whence);
-#endif
-#define RAZF FILE
-#define razf_read(fp, buf, size) fread(buf, 1, size, fp)
-#define razf_open(fn, mode) fopen(fn, mode)
-#define razf_close(fp) fclose(fp)
-#define razf_seek(fp, offset, whence) fseeko(fp, offset, whence)
-#define razf_tell(fp) ftello(fp)
-#endif
-#ifdef _USE_KNETFILE
-#include "samtools/knetfile.h"
-#endif
-
+#include "samtools/faidx_t.h"
 
 #include <cctype>
 #include <cstring>
 #include <cmath>
-
-/* allocate memory, crashing if there is not enough space */
-void* safe_malloc( size_t n )
-{
-    void* x = malloc(n);
-    if( x ) return x;
-    else {
-        log_printf( LOG_ERROR, "Insufficient memory (malloc(%d) failed)\n", n );
-        exit(EXIT_FAILURE);
-    }
-}
-
 
 
 
@@ -172,25 +135,8 @@ static void colorspace_encode( char prev, char* seq )
 
 
 
-typedef struct {
-	uint64_t len:32, line_len:16, line_blen:16;
-	uint64_t offset;
-} faidx1_t;
-KHASH_MAP_INIT_STR(s, faidx1_t)
-
-
-struct __faidx_t {
-	RAZF *rz;
-	int n, m;
-	char **name;
-	khash_t(s) *hash;
-};
-
-
-
 char* faidx_fetch_seq_forced_lower( const faidx_t* fai, const char *c_name, int p_beg_i, int p_end_i )
 {
-
 	int l;
 	char c;
     khiter_t iter;
@@ -201,7 +147,8 @@ char* faidx_fetch_seq_forced_lower( const faidx_t* fai, const char *c_name, int 
     iter = kh_get(s, fai->hash, c_name);
     if(iter == kh_end(fai->hash)) return 0;
 
-    seq0 = seq = (char*)safe_malloc( (p_end_i - p_beg_i + 2)*sizeof(char) );
+    seq0 = seq = (char*)malloc( (p_end_i - p_beg_i + 2) * sizeof(char) );
+    if( seq0 == NULL ) fail( "Out of memory.\n" );
     seq0[p_end_i-p_beg_i+1] = '\0';
 
     val = kh_value(fai->hash, iter);

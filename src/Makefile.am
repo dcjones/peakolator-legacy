@@ -1,7 +1,7 @@
 
 SUBDIRS=samtools yaml-cpp
 
-dist_bin_SCRIPTS = peakolate peakolate-seqbias
+dist_bin_SCRIPTS = peakolate
 bin_PROGRAMS = peakolate-seqbias
 pyexec_LTLIBRARIES = peakolator.la
 
@@ -34,8 +34,8 @@ peakolator_la_LIBADD = samtools/libbam.la \
 					   -lgslcblas \
 					   -lnlopt 
 
-peakolator.cpp : peakolator.pyx
-	cython --cplus -o $@ $^
+peakolator.cpp : peakolator.pyx sequencing_bias.pxi sequencing_bias.pxd
+	cython --cplus -o $@ $<
 
 
 peakolate_seqbias_SOURCES = peakolate_seqbias.pyx \

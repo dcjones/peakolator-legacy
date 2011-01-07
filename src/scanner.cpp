@@ -349,9 +349,8 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 
         /* Case 3: !! ERROR !! */
         else {
-            log_puts( LOG_ERROR, "Error: LLI bounds are niether equal nor disjoint. "
-                      "Please investigate/report.\n" );
-            exit(1);
+            fail( "Error: LLI bounds are niether equal nor disjoint. "
+                  "Please investigate/report.\n" );
         }
 
         delete B;

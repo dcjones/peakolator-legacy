@@ -2,12 +2,10 @@
 #ifndef PEAKOLATOR_COMMON
 #define PEAKOLATOR_COMMON
 
+#include <algorithm>
 #include <cstdlib>
 #include "samtools/faidx.h"
 
-
-/* allocate memory, crashing if there is not enough space */
-void* safe_malloc( size_t n );
 
 typedef long          pos;     /* genomic position */
 typedef unsigned long rcount;  /* read count */
@@ -23,7 +21,7 @@ template <typename T>
 void rev( T* xs, int n ) {
     int i = 0;
     int j = n-1;
-    while( i < j ) swap(xs[i++],xs[j--]);
+    while( i < j ) std::swap(xs[i++],xs[j--]);
 }
 
 /* Change the behavior of the faidx_fetch_seq function to be more useful. If

@@ -14,7 +14,6 @@ class sequencing_bias
 {
     public:
         sequencing_bias( const char* ref_fn,
-                         const char* reads_fn,
                          const char* model_fn );
 
         sequencing_bias( const char* ref_fn,

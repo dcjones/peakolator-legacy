@@ -31,7 +31,6 @@ sequencing_bias::sequencing_bias()
 {}
 
 sequencing_bias::sequencing_bias( const char* ref_fn,
-                                  const char* reads_fn,
                                   const char* model_fn )
 {
     std::ifstream fin;
@@ -51,8 +50,7 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
     if( ref_fn ) {
         ref_f = fai_load(ref_fn);
         if( ref_f == NULL ) {
-            log_printf( LOG_ERROR, "Can't open fasta file '%s'\n", ref_fn );
-            exit(1);
+            failf( "Can't open fasta file '%s'\n", ref_fn );
         }
     }
     else ref_f = NULL;
@@ -88,8 +86,7 @@ sequencing_bias* sequencing_bias::copy() const
     if( ref_fn ) {
         sb->ref_f = fai_load(ref_fn);
         if( sb->ref_f == NULL ) {
-            log_printf( LOG_ERROR, "Can't open fasta file '%s'\n", ref_fn );
-            exit(1);
+            failf( "Can't open fasta file '%s'\n", ref_fn );
         }
     }
     else sb->ref_f = NULL;
@@ -124,8 +121,7 @@ void sequencing_bias::save_to_file( const char* fn ) const
 {
     FILE* f = fopen( fn, "w" );
     if( f == NULL ) {
-        log_printf( LOG_ERROR, "Can\'t open file %s\n", fn );
-        exit(1);
+        failf( "Can\'t open file %s\n", fn );
     }
 
     YAML::Emitter out;
@@ -173,8 +169,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open bam file '%s'.\n", reads_fn );
-        exit(1);
+        failf( "Can't open bam file '%s'.\n", reads_fn );
     }
 
     table T;
@@ -195,8 +190,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     ref_f = fai_load(ref_fn);
     if( ref_f == NULL ) {
-        log_printf( LOG_ERROR, "Can't open fasta file '%s'\n", ref_fn );
-        exit(1);
+        failf( "Can't open fasta file '%s'\n", ref_fn );
     }
 
     std::deque<sequence*> training_seqs;
@@ -215,7 +209,7 @@ void sequencing_bias::build( const char* ref_fn,
     char*          seq       = NULL;
 
     char* local_seq;
-    local_seq = (char*)safe_malloc(sizeof(char)*(L+R+2));
+    local_seq = new char[ L + R + 2 ];
     local_seq[L+R+1] = '\0';
 
 
@@ -353,9 +347,9 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
     if( strand < 0 || ref_f == NULL || M0 == NULL || M1 == NULL ) return NULL;
 
     pos i;
-    pos   seqlen = end - start + 1;
+    pos seqlen = end - start + 1;
 
-    double* bias = (double*)safe_malloc( seqlen * sizeof(double) );
+    double* bias = new double[ seqlen ];
     for( i = 0; i < seqlen; i++ ) bias[i] = 1.0;
 
     char* seqstr;
@@ -363,7 +357,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
     if( strand == 1 ) {
         seqstr = faidx_fetch_seq_forced_lower( ref_f, seqname,
                                                start-R, end+L );
-        if( seqstr ) seqrc( seqstr, seqlen );
+        if( seqstr ) seqrc( seqstr, seqlen + R + L );
     }
     else {
         seqstr = faidx_fetch_seq_forced_lower( ref_f, seqname,

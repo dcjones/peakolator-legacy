@@ -54,12 +54,10 @@ pos subinterval::length() const
 void subinterval_bound::check() const
 {
     if( I_min > I_max || J_min > J_max || rate < 0.0 )  {
-        log_printf( LOG_ERROR,
-                "Fatal error: nonsense interval bounds encountered\n"
-                "bounds = (%ld,%ld,%ld,%ld) rate = %0.4e\n"
-                "Report/investigate.\n",
-                I_min, I_max, J_min, J_max, rate );
-        exit(1);
+        failf( "Fatal error: nonsense interval bounds encountered\n"
+               "bounds = (%ld,%ld,%ld,%ld) rate = %0.4e\n"
+               "Report/investigate.\n",
+               I_min, I_max, J_min, J_max, rate );
     }
 }
 

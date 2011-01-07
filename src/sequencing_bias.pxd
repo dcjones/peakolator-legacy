@@ -8,7 +8,7 @@ cdef extern from "sequencing_bias.hpp":
         pass
 
     c_sequencing_bias* load_sequencing_bias "new sequencing_bias" (
-           char* ref_fn, char* reads_fn, char* model_fn )
+           char* ref_fn, char* model_fn )
 
     c_sequencing_bias* train_sequencing_bias "new sequencing_bias" (
            char* ref_fn, char* reads_fn, size_t n, int L, int R,

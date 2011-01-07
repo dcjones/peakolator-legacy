@@ -68,3 +68,5 @@ libyaml_cpp_la_SOURCES = \
 	yaml.h
 
 
+EXTRA_DIST = COPYING
+

@@ -31,10 +31,10 @@ void context::clear()
     seqname = NULL;
     strand  = -1;
 
-    free(xs[0]); free(xs[1]);
+    delete[] xs[0]; delete[] xs[1];
     xs[0] = xs[1] = NULL;
 
-    free(rs[0]); free(rs[1]);
+    delete[] xs[0]; delete[] xs[1];
     rs[0] = rs[1] = NULL;
 }
 
@@ -82,7 +82,7 @@ void context::set( dataset* dataset, const char* seqname,
             continue;
         }
 
-        xs[s] = (rcount*)safe_malloc( length()*sizeof(rcount) );
+        xs[s] = new rcount[ length() ];
         memset( xs[s], 0, length()*sizeof(rcount) );
         bam_fetch( dataset->reads_f->x.bam, dataset->reads_index,
                    bam_ref_id, bam_start, bam_end,
@@ -109,8 +109,8 @@ void context::set_noise( nulldist& dist, pos len )
         this->start    = 0;
         this->end      = len-1;
         this->strand   = 0;
-        this->rs[0]    = (double*)safe_malloc( len*sizeof(double) );
-        this->xs[0]    = (rcount*)safe_malloc( len*sizeof(double) );
+        this->rs[0]    = new double[ len ];
+        this->xs[0]    = new rcount[ len ];
     }
 
     pos i;

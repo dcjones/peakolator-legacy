@@ -13,6 +13,7 @@ libbam_la_SOURCES = \
 					bgzf.h \
 					faidx.c \
 					faidx.h \
+					faidx_t.h \
 					khash.h \
 					knetfile.c \
 					knetfile.h \
@@ -28,4 +29,6 @@ libbam_la_SOURCES = \
 					sam_header.h
 
 libbam_la_CFLAGS = -D_USE_KNETFILE -Wno-unused-result -Wno-format
+
+EXTRA_DIST = AUTHORS COPYING NEWS
 

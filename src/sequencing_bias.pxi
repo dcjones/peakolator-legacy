@@ -12,10 +12,10 @@ cdef class sequencing_bias:
         del_sequencing_bias( self.cthis )
 
 
-    def load( self, ref_fn, reads_fn, model_fn ):
+    def load( self, ref_fn, model_fn ):
         if self.cthis:
             del_sequencing_bias( self.cthis )
-        self.cthis = load_sequencing_bias( ref_fn, reads_fn, model_fn )
+        self.cthis = load_sequencing_bias( ref_fn, model_fn )
 
 
     def save( self, fn ):

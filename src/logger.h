@@ -21,6 +21,9 @@ void log_indent(void);
 void log_unindent(void);
 void log_verbosity(int);
 
+void fail( const char* msg );
+void failf( const char* fmt, ... );
+
 
 #ifdef __cplusplus
 }

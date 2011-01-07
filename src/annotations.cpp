@@ -225,8 +225,7 @@ rows* parse_file( const char* fn, gtf_row* (*parse_line)( char* ) )
 
     FILE* f = fopen( fn, "r" );
     if( f == NULL ) {
-        log_printf( LOG_ERROR, "Can\'t open file %s\n", fn );
-        exit(1);
+        failf( "Can\'t open file %s\n", fn );
     }
 
     while( fgets( line, max_line, f ) ) {
