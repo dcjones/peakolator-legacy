@@ -44,6 +44,9 @@ AX_PYTHON_MODULE( argparse, 1 )
 AM_CHECK_CYTHON
 
 # gsl
+AC_CHECK_LIB([m],[cos])
+AC_CHECK_LIB([gslcblas],[cblas_dgemm])
+AC_CHECK_LIB([gsl],[gsl_blas_dgemm])
 AX_PATH_GSL
 
 # nlopt

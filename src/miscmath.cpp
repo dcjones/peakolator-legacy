@@ -68,7 +68,7 @@ double log_beta_inc( double a, double b, double x )
         else                result = logaddexp( result, r );
 
         a += 1;
-        b = max( 0, b - 1 );
+        b = max( 0.0, b - 1 );
 
         if( gsl_fcmp( result, result0, 1e-16 ) == 0 ) break;
     }

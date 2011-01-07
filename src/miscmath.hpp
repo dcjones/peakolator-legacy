@@ -14,18 +14,21 @@ double logaddexp( double a, double b );
 double logsubexp( double a, double b );
 
 
+#ifdef HAVE_LIBGSL
 /* Compute: log( I_x( a, b ) ), where I is the regularized incomplete beta
  * function.  Equivalent to log( gsl_sf_beta_inc( a, b, x ) ), but computed in
  * such a way as to avoid underflow.
  */
 double log_beta_inc( double a, double b, double x );
 
+
 /* The negative binomial log comulative distribution function. */
 double lpnbinom( unsigned int q, double r, double p );
+#endif
 
 
 /* Generalived extreme value cumulative distribution function. */
-double pgev( double q, double loc, double scale, double shape, bool lowertail = false );
+double pgev( double q, double loc, double scale, double shape );
 
 
 /* Generalized extreme value log-density function. */
