@@ -80,12 +80,8 @@ double log_beta_inc( double a, double b, double x )
 
 double lpnbinom( unsigned int q, double r, double p, bool upper_tail )
 {
-    //double result = gsl_sf_beta_inc( r, q + 1.0, p );
-    //if( upper_tail ) return log( 1.0 - result );
-    //else             return log( result );
-    double result = log_beta_inc( r, q + 1.0, p );
-    if( upper_tail ) return logsubexp( 0.0, result );
-    else             return result;
+    if( upper_tail ) return log_beta_inc( q + 1.0, r, 1.0 - p );
+    else             return log_beta_inc( r, q + 1.0, p );
 }
 #endif
 
