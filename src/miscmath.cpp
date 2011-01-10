@@ -1,6 +1,7 @@
 
 #include "miscmath.hpp"
 #include <cmath>
+#include <cstdio>
 #include <algorithm>
 
 using namespace std;
@@ -30,16 +31,9 @@ double logaddexp( double x, double y )
 
 double logsubexp( double x, double y )
 {
-    double u = x - y;
-    if( u > 0.0 ) {
-        return x + log1p( -exp( -u ) );
-    }
-    else if( u <= 0.0 ) {
-        return y + log1p( -exp( u ) );
-    }
-    else {
-        return x - y;
-    }
+    double u = y - x;
+    if( gsl_finite(u) ) return x + log1p( -exp( u ) );
+    else                return x - y;
 }
 
 
@@ -49,37 +43,49 @@ double log_beta_inc( double a, double b, double x )
     /* Using Soper's Method, which possibly converges more slowly than the
      * continued fraction, but is easier to do in log space. */
 
-    if( x > (a + 1) / (a + b +2) || 1 - x < (b + 1) / (a + b + 2) ) {
-        return logsubexp( 0, log_beta_inc( b, a, 1 - x ) );
+    if( a < (a+b)*x ) {
+        return logsubexp( 0, log_beta_inc( b, a, 1.0 - x ) );
     }
 
     size_t maxiter = 200;
-    double result0;
-    double result = NAN;
+    double result = GSL_NAN;
     double r;
 
-    while( maxiter-- ) {
-        result0 = result;
+    int i;
+    int s = (int)(b + (1.0 - x) * (a + b));
 
-        r  = a * log(x) + (b - 1) * log( 1 - x );
-        r -= log(a) + gsl_sf_lnbeta( a, b );
+    for( i = 0; i < maxiter; i++ ) {
 
-        if( result == NAN ) result = r;
-        else                result = logaddexp( result, r );
+        if( i < s && b > 1.0 ) {
+            r  = a * log(x) + (b-1.0) * log(1.0-x);
+            r -= log(a) + gsl_sf_lnbeta(a,b);
+            a += 1;
+            b -= 1;
+        }
+        else {
+            r  = a * log(x) + (b) * log(1.0-x);
+            r -= log(a) + gsl_sf_lnbeta(a,b);
+            a += 1;
+        }
 
-        a += 1;
-        b = max( 0.0, b - 1 );
+        if( gsl_isnan( result ) ) result = r;
+        else                      result = logaddexp( result, r );
 
-        if( gsl_fcmp( result, result0, 1e-16 ) == 0 ) break;
+        if( !gsl_finite(result) || !gsl_finite(r) || abs(r) < 1e-12 ) break;
     }
 
     return result;
 }
 
 
-double lpnbinom( unsigned int q, double r, double p )
+double lpnbinom( unsigned int q, double r, double p, bool upper_tail )
 {
-    return logsubexp( 0, log_beta_inc( (double)(q + 1), r, p ) );
+    //double result = gsl_sf_beta_inc( r, q + 1.0, p );
+    //if( upper_tail ) return log( 1.0 - result );
+    //else             return log( result );
+    double result = log_beta_inc( r, q + 1.0, p );
+    if( upper_tail ) return logsubexp( 0.0, result );
+    else             return result;
 }
 #endif
 

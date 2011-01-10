@@ -23,7 +23,7 @@ double log_beta_inc( double a, double b, double x );
 
 
 /* The negative binomial log comulative distribution function. */
-double lpnbinom( unsigned int q, double r, double p );
+double lpnbinom( unsigned int q, double r, double p, bool upper_tail = true );
 #endif
 
 

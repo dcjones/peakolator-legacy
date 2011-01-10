@@ -39,7 +39,7 @@ void nulldist::build( double r, double p, int m, int n )
 
         A[i*n+0] = 1.0;
         for( j = 1; j < n; j++ ) {
-            A[i*n+j] = lpnbinom( j-1, i, p );
+            A[i*n+j] = lpnbinom( j-1, r * (double)i, p );
         }
     }
 }
@@ -94,7 +94,7 @@ nulldist::~nulldist()
 
 double nulldist::QX( double r_i, rcount x_i )
 {
-    if( x_i == 0 || r*r_i <= 0.0 ) return 1.0;
+    if( x_i == 0 || r*r_i <= 0.0 ) return 0.0;
 
     long int rd = (long int)ceil(r*r_i);
 

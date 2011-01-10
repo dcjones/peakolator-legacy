@@ -92,7 +92,7 @@ emppval::emppval( parameters* params  )
         M = new scanner( params, &ctx );
         for( j = 0; j < m; j++ ) {
             ctx.set_noise( params->dist, l );
-            x = M->least_likely_interval( 0, l-1, 1.0 ).score;
+            x = M->least_likely_interval( 0, l-1, 0.0 ).score;
             gsl_matrix_set( gf.xs, i, j, x );
         }
         delete M;
