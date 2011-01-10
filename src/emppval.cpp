@@ -129,7 +129,7 @@ emppval::emppval( parameters* params  )
     /* bounds */
     const double TINY_VAL = 1e-20;
     const double lower_bounds[] = { -HUGE_VAL, -HUGE_VAL,
-                                     TINY_VAL -HUGE_VAL };
+                                     TINY_VAL, -HUGE_VAL };
     const double upper_bounds[] = { HUGE_VAL, HUGE_VAL,
                                     HUGE_VAL, HUGE_VAL };
 
@@ -138,17 +138,19 @@ emppval::emppval( parameters* params  )
 
 
     /* step size */
-    const double step_size[]    = { 1.0, 1.0, 1.0, 0.1 };
+    const double step_size[] = { 1.0, 1.0, 1.0, 0.1 };
     nlopt_set_initial_step( fsolve, step_size );
 
     /* stopping criteria */
     nlopt_set_ftol_rel( fsolve, 1e-12 );
-    nlopt_set_maxeval(  fsolve, 1000 );
+    nlopt_set_maxeval( fsolve, 1000 );
 
     /* optimize! */
-    /* TODO: do something on failure */
-    nlopt_optimize( fsolve,  theta, &f_opt );
-    //if( nlopt_optimize( fsolve, theta, &f_opt ) < 0 ) return false;
+    int err = nlopt_optimize( fsolve, theta, &f_opt );
+
+    if( err < 0 ) {
+        failf( "Unable to fit emperical p-value model (err = %d)\n", err );
+    }
 
 
     c_mu[0]    = theta[0];

@@ -23,12 +23,12 @@ double log_beta_inc( double a, double b, double x );
 
 
 /* The negative binomial log comulative distribution function. */
-double lpnbinom( unsigned int q, double r, double p, bool upper_tail = true );
+double lpnbinom( unsigned int q, double r, double p, bool lower_tail = false );
 #endif
 
 
 /* Generalived extreme value cumulative distribution function. */
-double pgev( double q, double loc, double scale, double shape );
+double pgev( double q, double loc, double scale, double shape, bool lower_tail = false );
 
 
 /* Generalized extreme value log-density function. */

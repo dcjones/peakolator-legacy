@@ -78,23 +78,24 @@ double log_beta_inc( double a, double b, double x )
 }
 
 
-double lpnbinom( unsigned int q, double r, double p, bool upper_tail )
+double lpnbinom( unsigned int q, double r, double p, bool lower_tail )
 {
-    if( upper_tail ) return log_beta_inc( q + 1.0, r, 1.0 - p );
-    else             return log_beta_inc( r, q + 1.0, p );
+    if( lower_tail ) return log_beta_inc( r, q + 1.0, p );
+    else             return log_beta_inc( q + 1.0, r, 1.0 - p );
 }
 #endif
 
 
 
-double pgev( double q, double loc, double scale, double shape )
+double pgev( double q, double loc, double scale, double shape, bool lower_tail )
 {
     double p;
     q = (q - loc) / scale;
     if( shape == 0.0 ) p = exp( -exp( -q ) );
     else               p = exp( -pow( max( 1 + shape * q, 0.0 ), -1/shape ) );
 
-    return 1.0 - p;
+    if( lower_tail ) return 1.0 - p;
+    else             return p;
 }
 
 
