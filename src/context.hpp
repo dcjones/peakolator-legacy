@@ -21,6 +21,8 @@ class context
 
         void clear();
 
+        void adjust_interval_by_coverage( interval& ) const;
+        //void adjust_subinterval_by_coverage( subinterval& ) const;
 
         void print_adjusted_unadjusted_bias( FILE* out = stdout );
 
@@ -46,6 +48,9 @@ class context
 
         /* read counts for both strands */
         rcount* xs[2];
+
+        /* coverage for both strands */
+        rcount* cs[2];
 
         /* sequencing biases for both strands */
         double* rs[2]; 

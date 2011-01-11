@@ -2,6 +2,9 @@
 
 #include "context.hpp"
 #include <gsl/gsl_math.h>
+#include <algorithm>
+
+using namespace std;
 
 
 
@@ -19,6 +22,7 @@ context::context()
     : start(-1), end(-1), seqname(NULL), strand(-1)
 {
     xs[0] = NULL; xs[1] = NULL;
+    cs[0] = NULL; cs[1] = NULL;
     rs[0] = NULL; rs[1] = NULL;
 }
 
@@ -34,6 +38,9 @@ void context::clear()
     delete[] xs[0]; delete[] xs[1];
     xs[0] = xs[1] = NULL;
 
+    delete[] cs[0]; delete[] cs[1];
+    cs[0] = cs[1] = NULL;
+
     delete[] xs[0]; delete[] xs[1];
     rs[0] = rs[1] = NULL;
 }
@@ -43,8 +50,8 @@ void context::set( dataset* dataset, const interval& i )
     this->set( dataset, i.seqname, i.start, i.end, i.strand );
 }
 
-void context::set( dataset* dataset, const char* seqname,
-                              pos start, pos end, int strand )
+void context::set( dataset* ds, const char* seqname,
+                   pos start, pos end, int strand )
 {
     /* determine wether to examine both strand or just one */
     int s, s0, s1;
@@ -65,6 +72,16 @@ void context::set( dataset* dataset, const char* seqname,
 
 
     /* count reads */
+    bam_iter_t it;
+    bam1_t* read;
+    pos i;
+    size_t j;
+    pos read_end;
+    uint32_t* cigar;
+    uint8_t   cigar_op;
+    pos       cigar_opend;
+
+
     for( s = s0; s <= s1; s++ ) {
 
         /* so that bam_fetch_callback counts strand seperately */
@@ -74,32 +91,140 @@ void context::set( dataset* dataset, const char* seqname,
         int bam_ref_id, bam_start, bam_end, region_error;
         int c = asprintf( &region, "%s:%ld-%ld", seqname, start, end );
         if( c <= 0 ) continue;
-        region_error = bam_parse_region( dataset->reads_f->header, region,
+        region_error = bam_parse_region( ds->reads_f->header, region,
                                          &bam_ref_id, &bam_start, &bam_end );
         free(region);
         if( region_error != 0 || bam_ref_id < 0 ) {
             xs[s] = NULL;
+            cs[s] = NULL;
             continue;
         }
 
         xs[s] = new rcount[ length() ];
+        cs[s] = new rcount[ length() ];
         memset( xs[s], 0, length()*sizeof(rcount) );
-        bam_fetch( dataset->reads_f->x.bam, dataset->reads_index,
-                   bam_ref_id, bam_start, bam_end,
-                   (void*)this, bam_fetch_callback );
+        memset( cs[s], 0, length()*sizeof(rcount) );
+
+        it   = bam_iter_query( ds->reads_index, bam_ref_id, bam_start, bam_end );
+        read = bam_init1();
+
+        while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
+            if( bam1_strand(read) != s ) continue;
+
+            cigar = bam1_cigar(read);
+
+            i = read->core.pos;
+            for( i = read->core.pos, j = 0; i <= end, j < read->core.n_cigar; i++, j++ ) {
+                cigar_op    = cigar[j] &  BAM_CIGAR_MASK;
+                cigar_opend = i + (pos)(cigar[j] >> BAM_CIGAR_SHIFT);
+
+                if( cigar_op == BAM_CMATCH && cigar_opend >= start ) {
+                    for( ; i < cigar_opend, i <= end; i++ ) {
+                        if( i >= start ) cs[s][i - start]++;
+                    }
+                }
+                else i = cigar_opend;
+            }
+
+            /* set xs */
+            if( s == 0 && start <= read->core.pos && read->core.pos <= end ) {
+                xs[s][read->core.pos - start]++;
+            }
+            else {
+                read_end = bam_calend( &read->core, cigar ) - 1;
+                if( s == 1 && start <= read_end && read_end <= end ) {
+                    xs[s][read_end - start]++;
+                }
+            }
+        }
+
+        bam_destroy1(read);
     }
 
 
+
+
+        /* OLD OLD OLD */
+
+/*
+ *        while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
+ *            if( strand != -1 && bam1_strand(read) != strand ) continue;
+ *
+ *            [> positive strand <]
+ *            if( bam1_strand(read) == 0 ) {
+ *                i = read->core.pos;
+ *                read_end = bam_calend( &read->core, bam1_cigar(read) );
+ *                if( start <= i && i <= end ) xs[0][i-start]++;
+ *                for( i = max(start,i); i < read_end && i <= end; i++ ) {
+ *                    cs[0][i-start]++;
+ *                }
+ *            }
+ *            [> negative strand <]
+ *            else {
+ *                i = bam_calend( &read->core, bam1_cigar(read) ) - 1;
+ *                read_end = read->core.pos;
+ *                if( start <= i && i <- end ) xs[1][i-start]++;
+ *                for( i = min(end,i); i >= read_end && i >= start; i-- ) {
+ *                    cs[1][i-start]++;
+ *                }
+ *            }
+ *        }
+ *
+ *        bam_destroy1(read);
+ *    }
+ */
+
+
     /* get sequencing bias */
-    if( dataset->bias ) {
+    if( ds->bias ) {
         for( s = s0; s <= s1; s++ ) {
-            rs[s] = dataset->bias->get_bias( seqname, start, end, s );
+            rs[s] = ds->bias->get_bias( seqname, start, end, s );
         }
     }
     else rs[0] = rs[1] = NULL;
 
     this->strand = strand;
 }
+
+
+void context::adjust_interval_by_coverage( interval& I ) const
+{
+    rcount limit;
+    if( I.strand == 0 || I.strand == -1 ) {
+        if( cs[0] != NULL && xs[0] != NULL && start <= I.end && I.end <= end ) {
+            limit = max( xs[0][I.end - start], cs[0][I.end - start] );
+            while( I.end <= end && cs[0][I.end - start] >= limit ) I.end++;
+        }
+    }
+
+    if( I.strand == 1 || I.strand == -1 ) {
+        if( cs[1] != NULL && xs[1] != NULL && start <= I.start && I.start <= end ) {
+            limit = max( xs[1][I.start - start], cs[0][I.end - start] );
+            while( I.start >= start && cs[1][I.start - start] >= limit ) I.start--;
+        }
+    }
+}
+
+
+/*
+ *void context::adjust_subinterval_by_coverage( subinterval& I ) const
+ *{
+ *    rcount limit;
+ *    if( I.strand == 0 || I.strand == -1 ) {
+ *        if( cs[0] != NULL && xs[0] != NULL && 0 <= I.end && I.end < length() ) {
+ *            limit = xs[0][I.end];
+ *            while( I.end < length() && cs[0][I.end] >= limit ) I.end++;
+ *        }
+ *    }
+ *
+ *    if( I.strand == 1 || I.strand == -1 ) {
+ *        if( cs[1] != NULL && xs[1] != NULL && 0 <= I.start && I.start < length() ) {
+ *            limit = xs[1][I.start];
+ *            while( I.start >= 0 && cs[1][I.start] >= limit ) I.start--;
+ *        }
+ *    }
+ *}
+ */
 
 void context::set_noise( nulldist& dist, pos len )
 {
@@ -117,6 +242,7 @@ void context::set_noise( nulldist& dist, pos len )
     for( i = 0; i < len; i++ ) {
         rs[0][i] = 1.0;
         xs[0][i] = dist.rand( 1.0 );
+        /* don't bother generating coverage */
     }
 }
 

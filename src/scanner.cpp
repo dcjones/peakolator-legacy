@@ -97,7 +97,17 @@ interval_stack* scanner::run()
 
     log_printf( LOG_MSG, "finished scan of length %d\n", ctx->length() );
 
-    return new interval_stack( predictions, ctx->seqname, ctx->start, ctx->strand );
+    interval_stack* results = new interval_stack( predictions,
+                                                  ctx->seqname,
+                                                  ctx->start,
+                                                  ctx->strand );
+
+    interval_stack::iterator i;
+    for( i = results->begin(); i != results->end(); i++ ) {
+        ctx->adjust_interval_by_coverage( *i );
+    }
+
+    return results;
 }
 
 
