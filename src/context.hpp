@@ -42,6 +42,15 @@ class context
 
         pos length() const;
 
+        const char* get_seqname() const { return seqname; }
+        pos         get_start() const   { return start; }
+        pos         get_end() const     { return end; }
+        int         get_strand() const  { return strand; }
+
+    private:
+
+        dataset* ds;
+
         pos   start, end;
         char* seqname;
         int   strand;
@@ -49,8 +58,9 @@ class context
         /* read counts for both strands */
         rcount* xs[2];
 
-        /* coverage for both strands */
-        rcount* cs[2];
+        /* temporary coverage vector */
+        void get_coverage( pos u, pos v, int s ) const;
+        rcount* cs;
 
         /* sequencing biases for both strands */
         double* rs[2]; 

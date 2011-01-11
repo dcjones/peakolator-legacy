@@ -1,29 +1,19 @@
 
 
 #include "context.hpp"
+#include "logger.h"
 #include <gsl/gsl_math.h>
 #include <algorithm>
 
 using namespace std;
 
 
-
-int bam_fetch_callback( const bam1_t* b, void* a_ )
-{
-    context* a = (context*)a_;
-    if( (a->strand == -1 || bam1_strand(b) == a->strand) && b->core.pos >= a->start ) {
-        a->xs[bam1_strand(b)][b->core.pos - a->start]++;
-    }
-    return 0;
-}
-
-
 context::context()
-    : start(-1), end(-1), seqname(NULL), strand(-1)
+    : start(-1), end(-1), seqname(NULL), strand(-1), ds(NULL)
 {
     xs[0] = NULL; xs[1] = NULL;
-    cs[0] = NULL; cs[1] = NULL;
     rs[0] = NULL; rs[1] = NULL;
+    cs = NULL;
 }
 
 
@@ -34,15 +24,16 @@ void context::clear()
     free(seqname);
     seqname = NULL;
     strand  = -1;
+    ds      = NULL;
 
     delete[] xs[0]; delete[] xs[1];
     xs[0] = xs[1] = NULL;
 
-    delete[] cs[0]; delete[] cs[1];
-    cs[0] = cs[1] = NULL;
-
     delete[] xs[0]; delete[] xs[1];
     rs[0] = rs[1] = NULL;
+
+    delete[] cs;
+    cs = NULL;
 }
 
 void context::set( dataset* dataset, const interval& i )
@@ -53,132 +44,69 @@ void context::set( dataset* dataset, const interval& i )
 void context::set( dataset* ds, const char* seqname,
                    pos start, pos end, int strand )
 {
-    /* determine wether to examine both strand or just one */
-    int s, s0, s1;
-    if( strand >= 0 ) {
-        s0 = strand;
-        s1 = strand;
-    }
-    else {
-        s0 = 0;
-        s1 = 1;
-    }
-
     clear();
     this->seqname = strdup(seqname);
     this->start   = start;
     this->end     = end;
     this->strand  = strand;
+    this->ds      = ds;
 
 
     /* count reads */
     bam_iter_t it;
     bam1_t* read;
     pos i;
-    size_t j;
-    pos read_end;
-    uint32_t* cigar;
-    uint8_t   cigar_op;
-    pos       cigar_opend;
 
-
-    for( s = s0; s <= s1; s++ ) {
-
-        /* so that bam_fetch_callback counts strand seperately */
-        this->strand = s;
-
-        char* region;
-        int bam_ref_id, bam_start, bam_end, region_error;
-        int c = asprintf( &region, "%s:%ld-%ld", seqname, start, end );
-        if( c <= 0 ) continue;
-        region_error = bam_parse_region( ds->reads_f->header, region,
-                                         &bam_ref_id, &bam_start, &bam_end );
-        free(region);
-        if( region_error != 0 || bam_ref_id < 0 ) {
-            xs[s] = NULL;
-            cs[s] = NULL;
-            continue;
-        }
-
-        xs[s] = new rcount[ length() ];
-        cs[s] = new rcount[ length() ];
-        memset( xs[s], 0, length()*sizeof(rcount) );
-        memset( cs[s], 0, length()*sizeof(rcount) );
-
-        it   = bam_iter_query( ds->reads_index, bam_ref_id, bam_start, bam_end );
-        read = bam_init1();
-
-        while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
-            if( bam1_strand(read) != s ) continue;
-
-            cigar = bam1_cigar(read);
-
-            i = read->core.pos;
-            for( i = read->core.pos, j = 0; i <= end, j < read->core.n_cigar; i++, j++ ) {
-                cigar_op    = cigar[j] &  BAM_CIGAR_MASK;
-                cigar_opend = i + (pos)(cigar[j] >> BAM_CIGAR_SHIFT);
-
-                if( cigar_op == BAM_CMATCH && cigar_opend >= start ) {
-                    for( ; i < cigar_opend, i <= end; i++ ) {
-                        if( i >= start ) cs[s][i - start]++;
-                    }
-                }
-                else i = cigar_opend;
-            }
-
-            /* set xs */
-            if( s == 0 && start <= read->core.pos && read->core.pos <= end ) {
-                xs[s][read->core.pos - start]++;
-            }
-            else {
-                read_end = bam_calend( &read->core, cigar ) - 1;
-                if( s == 1 && start <= read_end && read_end <= end ) {
-                    xs[s][read_end - start]++;
-                }
-            }
-        }
-
-        bam_destroy1(read);
+    int tid = bam_get_tid( ds->reads_f->header, seqname );
+    if( tid < 0 ) {
+        failf( "Sequence '%s' is not present in BAM header.\n", seqname );
     }
 
 
+    cs = new rcount[ length() ];
+    memset( cs, 0, length()*sizeof(rcount) );
 
+    if( strand == 0 || strand == -1 ) {
+        xs[0] = new rcount[ length() ];
+        memset( xs[0], 0, length()*sizeof(rcount) );
+    }
 
-        /* OLD OLD OLD */
+    if( strand == 1 || strand == -1 ) {
+        xs[1] = new rcount[ length() ];
+        memset( xs[1], 0, length()*sizeof(rcount) );
+    }
 
-/*
- *        while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
- *            if( strand != -1 && bam1_strand(read) != strand ) continue;
- *
- *            [> positive strand <]
- *            if( bam1_strand(read) == 0 ) {
- *                i = read->core.pos;
- *                read_end = bam_calend( &read->core, bam1_cigar(read) );
- *                if( start <= i && i <= end ) xs[0][i-start]++;
- *                for( i = max(start,i); i < read_end && i <= end; i++ ) {
- *                    cs[0][i-start]++;
- *                }
- *            }
- *            [> negative strand <]
- *            else {
- *                i = bam_calend( &read->core, bam1_cigar(read) ) - 1;
- *                read_end = read->core.pos;
- *                if( start <= i && i <- end ) xs[1][i-start]++;
- *                for( i = min(end,i); i >= read_end && i >= start; i-- ) {
- *                    cs[1][i-start]++;
- *                }
- *            }
- *        }
- *
- *        bam_destroy1(read);
- *    }
- */
+    it   = bam_iter_query( ds->reads_index, tid, start, end );
+    read = bam_init1();
+
+    while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
+        if( strand != -1 && bam1_strand(read) != strand ) continue;
+
+        if( bam1_strand(read) == 0 ) {
+            i = read->core.pos;
+            if( start <= i && i <= end ) {
+                xs[0][i - start]++;
+            }
+        }
+        else {
+            i = bam_calend( &read->core, bam1_cigar(read) ) - 1;
+            if( start <= i && i <= end ) {
+                xs[1][i - start]++;
+            }
+        }
+    }
+
+    bam_destroy1(read);
 
 
     /* get sequencing bias */
     if( ds->bias ) {
-        for( s = s0; s <= s1; s++ ) {
-            rs[s] = ds->bias->get_bias( seqname, start, end, s );
+        if( strand == -1 || strand == 0 ) {
+            rs[0] = ds->bias->get_bias( seqname, start, end, 0 );
+        }
+
+        if( strand == -1 || strand == 1 ) {
+            rs[1] = ds->bias->get_bias( seqname, start, end, 1 );
         }
     }
     else rs[0] = rs[1] = NULL;
@@ -187,44 +115,72 @@ void context::set( dataset* ds, const char* seqname,
 }
 
 
-void context::adjust_interval_by_coverage( interval& I ) const
+void context::get_coverage( pos u, pos v, int s ) const
 {
-    rcount limit;
-    if( I.strand == 0 || I.strand == -1 ) {
-        if( cs[0] != NULL && xs[0] != NULL && start <= I.end && I.end <= end ) {
-            limit = max( xs[0][I.end - start], cs[0][I.end - start] );
-            while( I.end <= end && cs[0][I.end - start] >= limit ) I.end++;
+    if( ds == NULL || cs == NULL ) return;
+
+    bam1_t* read = bam_init1();
+    bam_iter_t it;
+    uint32_t* cigar;
+    uint8_t  c_op;
+    pos      c_end;
+    pos i;
+    size_t j;
+
+    int tid = bam_get_tid( ds->reads_f->header, seqname );
+    if( tid < 0 ) {
+        failf( "Sequence '%s' is not present in BAM header.\n", seqname );
+    }
+
+    memset( cs, 0, length() * sizeof(rcount) );
+
+    it = bam_iter_query( ds->reads_index, tid, u, v );
+
+    while( bam_iter_read( ds->reads_f->x.bam, it, read ) >= 0 ) {
+        if( bam1_strand(read) != s ) continue;
+
+        cigar = bam1_cigar(read);
+        i = read->core.pos;
+
+        for( j = 0; j < read->core.n_cigar && i <= end; j++ ) {
+
+            c_op  = cigar[j] &  BAM_CIGAR_MASK;
+            c_end = i + (pos)(cigar[j] >> BAM_CIGAR_SHIFT);
+
+            if( c_op != BAM_CMATCH || c_end <= start ) {
+                i = c_end;
+            }
+            else {
+                for( i = max( i, start ); i < min( c_end, end + 1 ); i++ ) {
+                    cs[i - start]++;
+                }
+            }
         }
     }
 
-    if( I.strand == 1 || I.strand == -1 ) {
-        if( cs[1] != NULL && xs[1] != NULL && start <= I.start && I.start <= end ) {
-            limit = max( xs[1][I.start - start], cs[0][I.end - start] );
-            while( I.start >= start && cs[1][I.start - start] >= limit ) I.start--;
-        }
-    }
+    bam_destroy1(read);
 }
 
 
-/*
- *void context::adjust_subinterval_by_coverage( subinterval& I ) const
- *{
- *    rcount limit;
- *    if( I.strand == 0 || I.strand == -1 ) {
- *        if( cs[0] != NULL && xs[0] != NULL && 0 <= I.end && I.end < length() ) {
- *            limit = xs[0][I.end];
- *            while( I.end < length() && cs[0][I.end] >= limit ) I.end++;
- *        }
- *    }
- *
- *    if( I.strand == 1 || I.strand == -1 ) {
- *        if( cs[1] != NULL && xs[1] != NULL && 0 <= I.start && I.start < length() ) {
- *            limit = xs[1][I.start];
- *            while( I.start >= 0 && cs[1][I.start] >= limit ) I.start--;
- *        }
- *    }
- *}
- */
+void context::adjust_interval_by_coverage( interval& I ) const
+{
+    rcount limit;
+
+    /* extend end */
+    if( strand == -1 || strand == 0 ) {
+        get_coverage( I.end, I.end+1, 0 );
+        limit = xs[0][ I.end - start ];
+        while( I.end <= end && cs[I.end - start] >= limit ) I.end++;
+    }
+
+    /* extend start */
+    if( strand == -1 || strand == 1 ) {
+        get_coverage( I.start, I.start+1, 1 );
+        limit = xs[1][ I.start - start ];
+        while( I.start >= start && cs[I.start - start] >= limit ) I.start--;
+    }
+}
+
 
 void context::set_noise( nulldist& dist, pos len )
 {
@@ -242,7 +198,6 @@ void context::set_noise( nulldist& dist, pos len )
     for( i = 0; i < len; i++ ) {
         rs[0][i] = 1.0;
         xs[0][i] = dist.rand( 1.0 );
-        /* don't bother generating coverage */
     }
 }
 

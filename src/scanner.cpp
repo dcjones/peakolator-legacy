@@ -98,9 +98,9 @@ interval_stack* scanner::run()
     log_printf( LOG_MSG, "finished scan of length %d\n", ctx->length() );
 
     interval_stack* results = new interval_stack( predictions,
-                                                  ctx->seqname,
-                                                  ctx->start,
-                                                  ctx->strand );
+                                                  ctx->get_seqname(),
+                                                  ctx->get_start(),
+                                                  ctx->get_strand() );
 
     interval_stack::iterator i;
     for( i = results->begin(); i != results->end(); i++ ) {
