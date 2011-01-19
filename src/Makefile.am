@@ -53,6 +53,7 @@ nodist_peakolate_seqbias_SOURCES = peakolate-seqbias.cpp
 
 peakolate_seqbias_LDADD = samtools/libbam.la \
 						  yaml-cpp/libyaml-cpp.la \
+						  -lz \
 						  -lgsl \
 						  -lgslcblas \
 						  $(PYTHON_LDFLAGS) \
