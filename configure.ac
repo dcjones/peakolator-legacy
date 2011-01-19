@@ -10,8 +10,8 @@ AM_PROG_CC_C_O
 AC_PROG_CXX
 
 # optimization flags
-opt_CFLAGS="-O3 -ffast-math"
-dbg_CFLAGS="-O0 -g"
+opt_CFLAGS="-g -O3 -ffast-math"
+dbg_CFLAGS="-g -O0"
 
 AC_ARG_ENABLE([debug],
               [AS_HELP_STRING([--enable-debug],

@@ -714,7 +714,7 @@ void train_motifs( motif& M0, motif& M1,
     while( true ) {
         round_num++;
 
-        log_printf( LOG_MSG, "round_num %4d (ic = %0.4e) ", round_num, ic_curr );
+        log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round_num, ic_curr );
 
         ic_best = -HUGE_VAL;
         j_best = i_best = 0;
@@ -729,7 +729,6 @@ void train_motifs( motif& M0, motif& M1,
 
 
             for( i = i_start; i <= j; i++ ) {
-                log_puts( LOG_MSG, "." );
 
                 if( M0.has_edge( i, j ) ) {
                     continue;
@@ -738,6 +737,8 @@ void train_motifs( motif& M0, motif& M1,
                 if( M0.num_parents(j) >= M0.k ) {
                     continue;
                 }
+
+                log_puts( LOG_MSG, "." );
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
@@ -916,9 +917,10 @@ void train_motifs_backwards( motif& M0, motif& M1,
             i_last = M0.num_parents(j) > 1 ? j-1 : j;
 
             for( i = 0; i <= i_last; i++ ) {
-                log_puts( LOG_MSG, "." );
 
                 if( !M0.has_edge( i, j ) ) continue;
+
+                log_puts( LOG_MSG, "." );
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);

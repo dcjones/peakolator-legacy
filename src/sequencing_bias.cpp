@@ -14,9 +14,29 @@ using namespace std;
 
 
 /* simply uniform random numbers */
-double rand_uniform( double a, double b )
+static double rand_uniform( double a, double b )
 {
     return a + b * (double)rand() / (double)RAND_MAX;
+}
+
+/* random gaussians (copied from GSL, to avoid dependency) */
+static double rand_gauss( double sigma )
+{
+    double x, y, r2;
+
+    do
+    {
+        /* choose x,y in uniform square (-1,-1) to (+1,+1) */
+        x = -1 + 2 * rand_uniform(0.0,1.0);
+        y = -1 + 2 * rand_uniform(0.0,1.0);
+
+        /* see if it is in the unit circle */
+        r2 = x * x + y * y;
+    }
+    while (r2 > 1.0 || r2 == 0);
+
+    /* Box-Muller transform */
+    return sigma * y * sqrt (-2.0 * log (r2) / r2);
 }
 
 
@@ -262,9 +282,8 @@ void sequencing_bias::build( const char* ref_fn,
 
             /* make things a bit more robust by sampling the background from a
              * random offset */
-            bg_offset = (pos)rand_uniform( 100.0, 200.0 );
-            if( rand_uniform( -1.0, 1.0 ) < 0.0 ) bg_offset = -bg_offset;
-
+            /* TODO: maybe this could be improved by taking more samples */
+            bg_offset = (pos)ceil( rand_gauss( 10 ) );
             bg_pos = S[i]->pos.pos + bg_offset;
 
             if( S[i]->pos.strand ) {

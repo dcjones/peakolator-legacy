@@ -36,7 +36,7 @@ dataset::dataset( const char* reads_fn, sequencing_bias* bias )
         failf( "Can't open bam index '%s.bai'.", reads_fn );
     }
 
-	bam_init_header_hash( reads_f->header );
+    bam_init_header_hash( reads_f->header );
 
     log_puts( LOG_MSG, "done.\n" );
 }
@@ -61,7 +61,7 @@ dataset* dataset::copy() const
         failf( "Can't open bam index '%s.bai'.", reads_fn );
     }
 
-	bam_init_header_hash( pd->reads_f->header );
+    bam_init_header_hash( pd->reads_f->header );
 
     pd->reads_fn = strdup(reads_fn);
 
