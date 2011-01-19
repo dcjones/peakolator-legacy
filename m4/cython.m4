@@ -16,12 +16,6 @@ if test "x$CYTHON_VERSION" != "x"; then
    py_cv_cython=yes
 fi
 
-if test "x$py_cv_cython" = "xyes"; then
-   ifelse([$1], [], [:],
-      AS_VERSION_COMPARE([$CYTHON_VERSION], [$1], [py_cv_cython=no]))
-fi
-])
-
 AC_MSG_RESULT([$py_cv_cython])
 
 if test "x$py_cv_cython" = "xyes"; then
