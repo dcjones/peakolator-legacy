@@ -37,13 +37,19 @@ AC_DEFINE(GSL_RANGE_CHECK_OFF)
 AX_CHECK_ZLIB
                
 # python
+AM_PATH_PYTHON
 AX_PYTHON_DEVEL( [>= '2.6'] ) 
 AX_PYTHON_MODULE( numpy, 1 )
 AX_PYTHON_MODULE( argparse, 1 )
 
 
 # cython
-AM_CHECK_CYTHON
+AC_MSG_CHECKING([for Cython >= 0.11.3])
+CYTHON_CHECK_VERSION(0.11.3, [AC_MSG_RESULT(yes)
+                              have_cython=yes],
+                             [AC_MSG_RESULT(no)
+                              have_cython=no])
+
 
 # gsl
 AC_CHECK_LIB([m],[cos])
