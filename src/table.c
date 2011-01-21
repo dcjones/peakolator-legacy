@@ -155,11 +155,11 @@ int compare_count( const void* x, const void* y )
     return (*a)->count - (*b)->count;
 }
 
+
 int compare_hashed_pos( const void* x, const void* y )
 {
     struct hashed_value* const * a = x;
     struct hashed_value* const * b = y;
-
 
     int c = (*a)->pos.tid - (*b)->pos.tid;
     if( c == 0 ) {
@@ -206,19 +206,14 @@ void table_sort_by_position( struct table* T,
 }
 
 
-bool table_member( struct table* T, bam1_t* read )
+bool table_member( struct table* T, struct read_pos* pos )
 {
-    struct read_pos pos;
-    pos.tid = read->core.tid;
-    pos.pos = read->core.pos;
-    pos.strand = bam1_strand(read);
-
-    uint32_t h = hash((void*)&pos, sizeof(struct read_pos)) % T->n;
+    uint32_t h = hash((void*)pos, sizeof(struct read_pos)) % T->n;
 
     struct hashed_value* u = T->A[h];
 
     while(u) {
-        if( memcmp( &u->pos, &pos, sizeof(struct read_pos) ) == 0 ) {
+        if( memcmp( &u->pos, pos, sizeof(struct read_pos) ) == 0 ) {
             return true;
         }
 

@@ -2,6 +2,7 @@
 #include "sequencing_bias.hpp"
 #include "logger.h"
 #include "common.hpp"
+#include "miscmath.hpp"
 
 #include <cmath>
 #include <cctype>
@@ -192,11 +193,12 @@ void sequencing_bias::build( const char* ref_fn,
         failf( "Can't open bam file '%s'.\n", reads_fn );
     }
 
+    /* find the first n unique reads by hashing */
     table T;
     hash_reads( &T, reads_f, n );
     n = T.m;
 
-    /* resort the remaining (1-q)*n by position */
+    /* sort by position */
     log_puts( LOG_MSG, "sorting by position ... " );
     struct hashed_value** S;
     table_sort_by_position( &T, &S );
@@ -216,13 +218,14 @@ void sequencing_bias::build( const char* ref_fn,
     std::deque<sequence*> training_seqs;
 
 
-    /* sample this many background sequence for each foreground sequence */
-    const int bg_count = 1;
+    /* background sampling */
+    const size_t bg_samples = 1; // make this many samples for each read
+    int bg_sample_num;           // keep track of the number of samples made
+    const size_t bg_tries = 5;   // make this many attempts to sample a vacant position
+    int bg_try_num;              // keep track of the number of tries
+    struct read_pos bg;          // background position being considered
     
-    int j;
-    pos bg_pos;
-    pos bg_offset;
-
+    int b;
     char*          seqname   = NULL;
     int            seqlen    = 0;
     int            curr_tid  = -1;
@@ -278,22 +281,27 @@ void sequencing_bias::build( const char* ref_fn,
 
         /* add a background sequence */
         /* adjust the current read position randomly, and sample */
-        for( j = 0; j < bg_count; j++ ) {
+        for( bg_sample_num = 0; bg_sample_num < bg_samples; bg_sample_num++ ) {
 
-            /* make things a bit more robust by sampling the background from a
-             * random offset */
-            /* TODO: maybe this could be improved by taking more samples */
-            bg_offset = (pos)ceil( rand_gauss( 10 ) );
-            bg_pos = S[i]->pos.pos + bg_offset;
+            /* attempt to sample a position near the current read, with no reads
+             * itself. */
+            memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
 
-            if( S[i]->pos.strand ) {
-                if( bg_pos < R ) continue;
-                memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
+            for( bg_try_num = 0; bg_try_num < bg_tries; bg_try_num++ ) {
+                bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
+                if( bg.pos < max(L,R) || bg.pos + max(L,R) + 1 > seqlen ) continue;
+                if( !table_member( &T, &bg ) ) break;
+            }
+
+
+            if( bg.strand ) {
+                if( bg.pos < R ) continue;
+                memcpy( local_seq, seq + bg.pos - R, (L+1+R)*sizeof(char) );
                 seqrc( local_seq, L+1+R );
             }
             else {
-                if( bg_pos < L ) continue;
-                memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
+                if( bg.pos < L ) continue;
+                memcpy( local_seq, seq + (bg.pos-L), (L+1+R)*sizeof(char) );
             }
 
             training_seqs.push_back( new sequence( local_seq, 0 ) );

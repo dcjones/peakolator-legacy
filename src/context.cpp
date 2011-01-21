@@ -16,6 +16,11 @@ context::context()
     cs = NULL;
 }
 
+context::~context()
+{
+    clear();
+}
+
 
 void context::clear()
 {

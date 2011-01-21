@@ -52,7 +52,7 @@ void table_destroy( struct table* T );
 
 void table_inc( struct table*, bam1_t* read );
 
-bool table_member( struct table*, bam1_t* read );
+bool table_member( struct table*, struct read_pos* pos );
 
 
 
@@ -64,8 +64,6 @@ void table_sort_by_position( struct table* T,
 
 void rehash_tail( struct table* T, int32_t q1, int32_t q2 );
  
-int compare_hashed_pos( const void* x, const void* y );
-
 
 
 #ifdef __cplusplus

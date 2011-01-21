@@ -14,6 +14,7 @@ class context
 {
     public:
         context();
+        ~context();
         void set( dataset* ds, const char* chrom,
                   pos start, pos end, int strand );
         void set( dataset* ds, const interval& );
