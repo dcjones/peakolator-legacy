@@ -55,6 +55,9 @@ class sequencing_bias
         faidx_t* ref_f;
         char*    ref_fn;
 
+        /* prior prob. that a given position is sequenced */
+        double p;
+
         /* trained background (M0) and foreground (M1) models */
         motif* M0;
         motif* M1;

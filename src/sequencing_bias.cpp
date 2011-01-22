@@ -224,6 +224,7 @@ void sequencing_bias::build( const char* ref_fn,
     const size_t bg_tries = 5;   // make this many attempts to sample a vacant position
     int bg_try_num;              // keep track of the number of tries
     struct read_pos bg;          // background position being considered
+    size_t bg_misses = 0;
     
     int b;
     char*          seqname   = NULL;
@@ -264,6 +265,11 @@ void sequencing_bias::build( const char* ref_fn,
         }
 
         if( seq == NULL ) continue;
+
+
+        log_printf( LOG_MSG, "read count = %d\n", S[i]->count );
+
+        if( S[i]->count != 1 ) continue;
         
         /* add a foreground sequence */
         if( S[i]->pos.strand ) {
@@ -293,6 +299,8 @@ void sequencing_bias::build( const char* ref_fn,
                 if( !table_member( &T, &bg ) ) break;
             }
 
+            if( bg_try_num > 0 ) bg_misses++;
+
 
             if( bg.strand ) {
                 if( bg.pos < R ) continue;
@@ -308,16 +316,18 @@ void sequencing_bias::build( const char* ref_fn,
         }
     }
 
+    p = (double)bg_misses / (double)n;
+    log_printf( LOG_MSG, "emperical prior: %0.4e\n", p );
 
-    size_t max_k = 5;
+    size_t max_k = 3;
     size_t max_dep_dist = 5;
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
     if( train_backwards ) {
-        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
+        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty, 0.5 );
     } else {
-        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
+        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty, 0.5 );
     }
 
 
@@ -401,7 +411,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
         L0 = M0->eval( *seq, i );
         L1 = M1->eval( *seq, i );
 
-        bias[i] = exp( L1 - L0 );
+        bias[i] = exp( log(p) + L1 - logaddexp( log(p) + L1, log(1-p) + L0 ) );
         if( !isfinite(bias[i]) ) bias[i] = 1.0;
     }
 
