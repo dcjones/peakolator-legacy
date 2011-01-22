@@ -269,8 +269,6 @@ void sequencing_bias::build( const char* ref_fn,
 
         log_printf( LOG_MSG, "read count = %d\n", S[i]->count );
 
-        if( S[i]->count != 1 ) continue;
-        
         /* add a foreground sequence */
         if( S[i]->pos.strand ) {
             if( S[i]->pos.pos < R ) continue;
@@ -293,14 +291,7 @@ void sequencing_bias::build( const char* ref_fn,
              * itself. */
             memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
 
-            for( bg_try_num = 0; bg_try_num < bg_tries; bg_try_num++ ) {
-                bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
-                if( bg.pos < max(L,R) || bg.pos + max(L,R) + 1 > seqlen ) continue;
-                if( !table_member( &T, &bg ) ) break;
-            }
-
-            if( bg_try_num > 0 ) bg_misses++;
-
+            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
 
             if( bg.strand ) {
                 if( bg.pos < R ) continue;
@@ -316,18 +307,15 @@ void sequencing_bias::build( const char* ref_fn,
         }
     }
 
-    p = (double)bg_misses / (double)n;
-    log_printf( LOG_MSG, "emperical prior: %0.4e\n", p );
-
     size_t max_k = 3;
     size_t max_dep_dist = 5;
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
     if( train_backwards ) {
-        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty, 0.5 );
+        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
     } else {
-        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty, 0.5 );
+        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
     }
 
 
@@ -411,7 +399,7 @@ double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int 
         L0 = M0->eval( *seq, i );
         L1 = M1->eval( *seq, i );
 
-        bias[i] = exp( log(p) + L1 - logaddexp( log(p) + L1, log(1-p) + L0 ) );
+        bias[i] = exp( L1 - L0 );
         if( !isfinite(bias[i]) ) bias[i] = 1.0;
     }
 

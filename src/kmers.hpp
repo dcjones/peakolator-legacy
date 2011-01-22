@@ -146,13 +146,11 @@ class motif
 
         friend void train_motifs( motif& M0, motif& M1,
                                   const std::deque<sequence*>* training_seqs,
-                                  size_t max_dep_dist, double complexity_penalty,
-                                  double prior );
+                                  size_t max_dep_dist, double complexity_penalty );
 
         friend void train_motifs_backwards( motif& M0, motif& M1,
                                             const std::deque<sequence*>* training_seqs,
-                                            size_t max_dep_dist, double complexity_penalty,
-                                            double prior );
+                                            size_t max_dep_dist, double complexity_penalty );
 };
 
 void train_motifs( motif& M0, motif& M1,
