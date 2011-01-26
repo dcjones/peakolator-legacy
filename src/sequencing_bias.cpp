@@ -195,13 +195,12 @@ void sequencing_bias::build( const char* ref_fn,
 
     /* find the first n unique reads by hashing */
     table T;
-    hash_reads( &T, reads_f, n );
-    n = T.m;
+    hash_reads( &T, reads_f, 0 );
 
     /* sort by position */
-    log_puts( LOG_MSG, "sorting by position ... " );
+    log_puts( LOG_MSG, "shuffling ... " );
     struct hashed_value** S;
-    table_sort_by_position( &T, &S );
+    table_sort_by_seq_rand( &T, &S );
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -237,7 +236,7 @@ void sequencing_bias::build( const char* ref_fn,
     local_seq[L+R+1] = '\0';
 
 
-    for( i = 0; i < n; i++ ) {
+    for( i = 0; i < n && i < T.m; i++ ) {
 
         /* Load/switch sequences (chromosomes) as they are encountered in the
          * read stream. The idea here is to avoid thrashing by loading a large
@@ -266,8 +265,6 @@ void sequencing_bias::build( const char* ref_fn,
 
         if( seq == NULL ) continue;
 
-
-        log_printf( LOG_MSG, "read count = %d\n", S[i]->count );
 
         /* add a foreground sequence */
         if( S[i]->pos.strand ) {

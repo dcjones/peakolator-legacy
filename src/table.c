@@ -147,6 +147,36 @@ void rehash( struct table* T, size_t new_n )
     T->min_m = T->n*MIN_LOAD;
 }
 
+
+int compare_seq_hash( const void* x, const void* y )
+{
+    struct hashed_value* const * a = x;
+    struct hashed_value* const * b = y;
+
+    int c = (*a)->pos.tid - (*b)->pos.tid;
+    if( c == 0 ) {
+        uint32_t ha = hash( (void*)&(*a)->pos, sizeof(struct read_pos) );
+        uint32_t hb = hash( (void*)&(*b)->pos, sizeof(struct read_pos) );
+        return (int32_t)a - (int32_t)b;
+    }
+    else return c;
+
+}
+
+int compare_seq_count( const void* x, const void* y )
+{
+    struct hashed_value* const * a = x;
+    struct hashed_value* const * b = y;
+
+    int c = (*a)->pos.tid - (*b)->pos.tid;
+    if( c == 0 ) {
+        if( (*a)->count == (*b)->count ) return 0;
+        else return (*a)->count > (*b)->count ? 1 : -1;
+    }
+    else return c;
+}
+
+
 int compare_count( const void* x, const void* y )
 {
     struct hashed_value* const * a = x;
@@ -192,6 +222,19 @@ void sort_table( struct table* T,
 
     *S_ = S;
 }
+
+void table_sort_by_seq_rand( struct table* T,
+                             struct hashed_value*** S_ )
+{
+    sort_table( T, S_, compare_seq_hash );
+}
+
+void table_sort_by_seq_count( struct table* T,
+                              struct hashed_value*** S_ )
+{
+    sort_table( T, S_, compare_seq_count );
+}
+
 
 void table_sort_by_count( struct table* T,
                     struct hashed_value*** S_ )

@@ -56,6 +56,12 @@ bool table_member( struct table*, struct read_pos* pos );
 
 
 
+void table_sort_by_seq_rand( struct table* T,
+                             struct hashed_value*** _S );
+
+void table_sort_by_seq_count( struct table* T,
+                                  struct hashed_value*** S );
+
 void table_sort_by_count( struct table* T,
                     struct hashed_value*** S );
 
