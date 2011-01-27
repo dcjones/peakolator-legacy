@@ -28,7 +28,7 @@ libbam_la_SOURCES = \
 					sam_header.c \
 					sam_header.h
 
-libbam_la_CFLAGS = -D_USE_KNETFILE -Wno-unused-result -Wno-format
+libbam_la_CFLAGS = -D_USE_KNETFILE -Wno-format
 
 EXTRA_DIST = AUTHORS COPYING NEWS
 
