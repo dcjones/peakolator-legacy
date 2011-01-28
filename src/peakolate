@@ -765,7 +765,9 @@ def scan( args, data, chrom_sizes, regions ):
     for prediction in iter(prediction_queue.get,None):
         predictions.append( prediction )
         prediction_queue.task_done()
-    prediction_queue.task_done()
+    prediction_queue.task_done() # None task
+    prediction_queue.join()
+    prediction_queue.close()
 
     return predictions
 
