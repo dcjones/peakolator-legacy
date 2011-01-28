@@ -741,7 +741,7 @@ def scan( args, data, chrom_sizes, regions ):
                      args = (region_queue, prediction_queue,
                              data.copy(), params.copy() ) )
         t.start()
-        procs = append(t)
+        procs.append(t)
 
 
     for seqname in regions:
