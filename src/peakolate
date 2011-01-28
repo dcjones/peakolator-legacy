@@ -735,11 +735,13 @@ def scan( args, data, chrom_sizes, regions ):
     prediction_queue = JoinableQueue()
 
     region_queue  = JoinableQueue()
+    procs = []
     for _ in range(args.num_procs):
         t = Process( target = peakolate,
                      args = (region_queue, prediction_queue,
                              data.copy(), params.copy() ) )
         t.start()
+        procs = append(t)
 
 
     for seqname in regions:
@@ -755,6 +757,9 @@ def scan( args, data, chrom_sizes, regions ):
         region_queue.put( None )
     region_queue.join()
     region_queue.close()
+
+    for proc in procs:
+        proc.terminate()
 
 
     # join reporting process
