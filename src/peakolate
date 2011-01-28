@@ -759,13 +759,13 @@ def scan( args, data, chrom_sizes, regions ):
 
     # join reporting process
     prediction_queue.put( None )
-    prediction_queue.close()
 
     # return a list of predictions
     predictions = []
     for prediction in iter(prediction_queue.get,None):
         predictions.append( prediction )
         prediction_queue.task_done()
+    prediction_queue.task_done()
 
     return predictions
 
@@ -865,7 +865,7 @@ def main():
     #
     # Two magic numbers prevent this from running unreasonably long:
     #   At most this many iterations are preformed:
-    iteration_limit   = 10
+    iteration_limit   = 20
     #   Halt if fewer than this many trascribed regions are found:
     iteration_min_new = 50
 
