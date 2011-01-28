@@ -732,10 +732,8 @@ def scan( args, data, chrom_sizes, regions ):
 
 
 
-    # launch process to report hits
     prediction_queue = JoinableQueue()
-
-    region_queue  = JoinableQueue()
+    region_queue     = JoinableQueue()
     procs = []
     for _ in range(args.num_procs):
         t = Process( target = peakolate,
@@ -758,14 +756,9 @@ def scan( args, data, chrom_sizes, regions ):
     for _ in range(args.num_procs):
         region_queue.put( None )
 
-    for proc in procs:
-        proc.join()
-
     region_queue.join()
-    region_queue.close()
-
-    # join reporting process
     prediction_queue.put( None )
+
 
     # return a list of predictions
     predictions = []
@@ -773,8 +766,8 @@ def scan( args, data, chrom_sizes, regions ):
         predictions.append( prediction )
         prediction_queue.task_done()
     prediction_queue.task_done() # None task
-    prediction_queue.join()
-    prediction_queue.close()
+
+    for proc in procs: proc.join()
 
     return predictions
 
