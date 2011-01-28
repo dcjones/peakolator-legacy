@@ -50,7 +50,7 @@ double scanner::QX( double r, rcount x )
 /* run the scanner, returning all significant sub-intervals */
 interval_stack* scanner::run()
 {
-    log_printf( LOG_MSG, "running scan of length %d\n", ctx->length() );
+    log_printf( LOG_BLAB, "running scan of length %d\n", ctx->length() );
 
     /* in place of recursion, subintervals left to search */
     subinterval_stack unexplored;
@@ -95,7 +95,7 @@ interval_stack* scanner::run()
         }
     }
 
-    log_printf( LOG_MSG, "finished scan of length %d\n", ctx->length() );
+    log_printf( LOG_BLAB, "finished scan of length %d\n", ctx->length() );
 
     interval_stack* results = new interval_stack( predictions,
                                                   ctx->get_seqname(),

@@ -575,7 +575,7 @@ def peakolate( region_queue, prediction_queue, data, params ):
 
         (seqname,start,end,strand) = R
 
-        msg.write( 'got one of length %d.\n' % (end-start+1) )
+        msg.write( 'got one of length %d.\n' % (end-start+1), peakolator.LOG_BLAB )
 
         ctx.set( data, seqname, start, end, strand )
 
@@ -589,6 +589,7 @@ def peakolate( region_queue, prediction_queue, data, params ):
         region_queue.task_done()
 
     region_queue.task_done() # complete the None task
+    msg.write( 'done!' )
 
 
 
@@ -752,15 +753,16 @@ def scan( args, data, chrom_sizes, regions ):
             if end - start + 1 < params.d_min: continue
             region_queue.put( (seqname, start, end, strand) )
 
+
     # join scaning processes
     for _ in range(args.num_procs):
         region_queue.put( None )
-    region_queue.join()
-    region_queue.close()
 
     for proc in procs:
-        proc.terminate()
+        proc.join()
 
+    region_queue.join()
+    region_queue.close()
 
     # join reporting process
     prediction_queue.put( None )
