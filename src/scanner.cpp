@@ -132,7 +132,7 @@ void scanner::conditional_push_copy(
 
 subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 {
-    log_printf( LOG_BLAB, "scanning %dnt...\n", j-i+1 );
+    log_printf( LOG_MSG, "scanning %dnt...\n", j-i+1 );
     log_indent();
     clock_t t0, t1;
     t0 = clock();

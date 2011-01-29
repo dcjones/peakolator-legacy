@@ -581,14 +581,10 @@ def peakolate( region_queue, prediction_queue, data, params ):
 
         M = peakolator.scanner( params, ctx )
 
-        for I in M.run():
-            prediction_queue.put(
-                    (I.seqname, I.start, I.end,
-                     I.strand, I.score, 'peakolator_intergenic' ) )
+        prediction_queue.put(
+                [ (I.seqname, I.start, I.end, I.strand, I.score, 'peakolator')
+                  for I in M.run() ] )
 
-        region_queue.task_done()
-
-    region_queue.task_done() # complete the None task
     msg.write( 'done!' )
 
 
@@ -732,16 +728,9 @@ def scan( args, data, chrom_sizes, regions ):
 
 
 
-    prediction_queue = JoinableQueue()
-    region_queue     = JoinableQueue()
-    procs = []
-    for _ in range(args.num_procs):
-        t = Process( target = peakolate,
-                     args = (region_queue, prediction_queue,
-                             data.copy(), params.copy() ) )
-        t.start()
-        procs.append(t)
-
+    prediction_queue = Queue()
+    region_queue     = Queue()
+    n = 0
 
     for seqname in regions:
         if seqname not in chrom_sizes: continue
@@ -750,24 +739,24 @@ def scan( args, data, chrom_sizes, regions ):
         for (start, end, strand) in regions[seqname]:
             if end - start + 1 < params.d_min: continue
             region_queue.put( (seqname, start, end, strand) )
+            n += 1
 
 
-    # join scaning processes
+    for _ in range(args.num_procs):
+        t = Process( target = peakolate,
+                     args = (region_queue, prediction_queue,
+                             data.copy(), params.copy() ) )
+        t.start()
+
+
+    predictions = []
+    for i in xrange(n):
+        predictions.extend( prediction_queue.get() )
+
+
+    # end scanning processes
     for _ in range(args.num_procs):
         region_queue.put( None )
-
-    region_queue.join()
-    prediction_queue.put( None )
-
-
-    # return a list of predictions
-    predictions = []
-    for prediction in iter(prediction_queue.get,None):
-        predictions.append( prediction )
-        prediction_queue.task_done()
-    prediction_queue.task_done() # None task
-
-    for proc in procs: proc.join()
 
     return predictions
 
