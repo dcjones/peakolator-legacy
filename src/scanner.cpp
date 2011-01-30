@@ -75,7 +75,9 @@ interval_stack* scanner::run()
 
 
         /* filter out the obviously non-significant intervals */
-        if( S_min.score >= log(params->alpha) ) continue;
+        if( S_min.start < 0 ||
+            S_min.end < 0 ||
+            S_min.score >= log(params->alpha) ) continue;
 
         if( params->padj ) {
             S_min.score = (*params->padj)( S_min.score, S.length() ); 

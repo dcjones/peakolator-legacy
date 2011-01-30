@@ -220,10 +220,7 @@ void sequencing_bias::build( const char* ref_fn,
     /* background sampling */
     const size_t bg_samples = 1; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
-    const size_t bg_tries = 5;   // make this many attempts to sample a vacant position
-    int bg_try_num;              // keep track of the number of tries
     struct read_pos bg;          // background position being considered
-    size_t bg_misses = 0;
     
     int b;
     char*          seqname   = NULL;
