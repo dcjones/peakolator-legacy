@@ -44,6 +44,7 @@ struct table
     size_t m;                /* hashed items */
     size_t max_m;            /* max hashed items before rehash */
     size_t min_m;            /* min hashed items before rehash */
+    char**    seq_names;
 };
 
 
@@ -51,6 +52,7 @@ void table_create( struct table* T );
 void table_destroy( struct table* T );
 
 void table_inc( struct table*, bam1_t* read );
+void table_inc_pos( struct table*, int32_t tid, int32_t pos, uint32_t strand );
 
 bool table_member( struct table*, struct read_pos* pos );
 

@@ -29,6 +29,7 @@ void table_create( struct table* T )
     T->m = 0;
     T->max_m = T->n * MAX_LOAD;
     T->min_m = T->n * MIN_LOAD;
+    T->seq_names = NULL;
 }
 
 
@@ -61,20 +62,22 @@ void table_destroy( struct table* T )
 
 void table_inc( struct table* T, bam1_t* read )
 {
+    int32_t pos;
+    if( bam1_strand(read) ) pos = bam_calend( &read->core, bam1_cigar(read) ) - 1;
+    else                    pos = read->core.pos;
+
+    table_inc_pos( T, read->core.tid, pos, bam1_strand(read) );
+}
+
+
+void table_inc_pos( struct table* T, int32_t tid, int32_t p, uint32_t strand )
+{
     if( T->m == T->max_m ) rehash( T, T->n*2 );
 
     struct read_pos pos;
-    pos.tid = read->core.tid;
-    /*                                      XXX: I don't know why I must
-     *                                      subtract one here. It bothers me
-     *                                      that I don't, but the results do not
-     *                                      come out correctly otherwise.
-     *                                      Possibly, the function gives the
-     *                                      nucleotide immediately after the
-     *                                      read. */
-    if( bam1_strand(read) ) pos.pos = bam_calend( &read->core, bam1_cigar(read) ) - 1;
-    else                    pos.pos = read->core.pos;
-    pos.strand = bam1_strand(read);
+    pos.tid = tid;
+    pos.pos = p;
+    pos.strand = strand;
 
     uint32_t h = hash((void*)&pos, sizeof(struct read_pos)) % T->n;
 

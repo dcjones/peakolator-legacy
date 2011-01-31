@@ -1,10 +1,8 @@
 
 
+from stdlib          cimport malloc, free
 from sequencing_bias cimport *
 
-
-cdef extern from "stdlib.h":
-    void free( void* )
 
 cdef extern from "string.h":
     char* strdup( char* )

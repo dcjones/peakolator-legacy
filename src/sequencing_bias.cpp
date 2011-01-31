@@ -91,6 +91,21 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
     build( ref_fn, reads_fn, n, L, R, train_backwards, complexity_penalty );
 }
 
+
+sequencing_bias::sequencing_bias( const char* ref_fn,
+                                  table* T, size_t n,
+                                  pos L, pos R,
+                                  bool   train_backwards,
+                                  double complexity_penalty )
+    : ref_f(NULL)
+    , ref_fn(NULL)
+    , M0(NULL), M1(NULL)
+{
+    build( ref_fn, T, n, L, R, train_backwards, complexity_penalty );
+}
+
+
+
 sequencing_bias* sequencing_bias::copy() const
 {
     sequencing_bias* sb = new sequencing_bias();
@@ -179,14 +194,6 @@ void sequencing_bias::build( const char* ref_fn,
     clock_t t0, t1;
     t0 = clock();
 
-    clear();
-
-    this->ref_fn   = strdup(ref_fn);
-    
-    this->L = L;
-    this->R = R;
-
-    unsigned int i;
 
     samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
@@ -197,10 +204,40 @@ void sequencing_bias::build( const char* ref_fn,
     table T;
     hash_reads( &T, reads_f, 0 );
 
+    build( ref_fn, &T, L, R, train_backwards, complexity_penalty );
+
+    table_destroy(&T);
+    samclose(reads_f);
+
+    t1 = clock();
+    log_printf( LOG_MSG, "finished in %0.2f seconds\n",
+                         (double)(t1-t0)/(double)CLOCKS_PER_SEC );
+
+    log_unindent();
+}
+
+
+
+void sequencing_bias::build( const char* ref_fn,
+                             table* T, size_t n,
+                             pos L, pos R,
+                             bool   train_backwards,
+                             double complexity_penalty )
+{
+    clear();
+
+    this->ref_fn   = strdup(ref_fn);
+    
+    this->L = L;
+    this->R = R;
+
+    unsigned int i;
+
+
     /* sort by position */
     log_puts( LOG_MSG, "shuffling ... " );
     struct hashed_value** S;
-    table_sort_by_seq_rand( &T, &S );
+    table_sort_by_seq_rand( T, &S );
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -233,20 +270,19 @@ void sequencing_bias::build( const char* ref_fn,
     local_seq[L+R+1] = '\0';
 
 
-    for( i = 0; i < n && i < T.m; i++ ) {
+    for( i = 0; (n == 0 || i < n) && i < T->m; i++ ) {
 
         /* Load/switch sequences (chromosomes) as they are encountered in the
          * read stream. The idea here is to avoid thrashing by loading a large
          * sequence, but also avoid overloading memory by only loading one
          * chromosome at a time. */
         if( S[i]->pos.tid != curr_tid ) {
-            seqname = reads_f->header->target_name[S[i]->pos.tid];
-            seqlen  = reads_f->header->target_len[S[i]->pos.tid];
+            seqname = T->seq_names[ S[i]->pos.tid ];
             if( seq ) free(seq); 
 
             log_printf( LOG_MSG, "reading sequence '%s' ... ", seqname );
 
-            seq = faidx_fetch_seq( ref_f, seqname, 0, seqlen-1, &seqlen );
+            seq = faidx_fetch_seq( ref_f, seqname, 0, 1000000000, &seqlen );
 
             if( seq == NULL ) {
                 log_puts( LOG_WARN, "warning: reference sequence not found, skipping.\n" );
@@ -273,6 +309,8 @@ void sequencing_bias::build( const char* ref_fn,
             if( S[i]->pos.pos < L ) continue;
             memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
         }
+
+        log_printf( LOG_MSG, "seq: %s\n", local_seq );
 
         training_seqs.push_back( new sequence( local_seq, 1 ) );
 
@@ -325,14 +363,6 @@ void sequencing_bias::build( const char* ref_fn,
     free(S);
     free(seq);
     free(local_seq);
-    samclose(reads_f);
-    table_destroy(&T);
-
-    t1 = clock();
-    log_printf( LOG_MSG, "finished in %0.2f seconds\n",
-                         (double)(t1-t0)/(double)CLOCKS_PER_SEC );
-
-    log_unindent();
 }
 
 
@@ -348,6 +378,7 @@ void sequencing_bias::hash_reads( table* T, samfile_t* reads_f, size_t limit ) c
     log_puts( LOG_MSG, "hashing read positions..." );
 
     table_create(T);
+    T->seq_names = reads_f->header->target_name;
 
     bam1_t* read = bam_init1();
 

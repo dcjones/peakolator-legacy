@@ -314,3 +314,45 @@ def get_chrom_sizes_from_bam( bam_fn ):
     return chrom_sizes
 
 
+
+## a sequence motif representation using the bias correction machinery
+cdef class motif:
+    cdef c_sequencing_bias* cthis
+
+    def __cinit__( self, ref_fn, positions, L = 5, R = 5 ):
+        cdef table T
+
+        tids = {}
+        table_create( &T )
+        for (seqname, pos, strand) in positions:
+            if seqname not in tids: tids[seqname] = len(tids)
+            table_inc_pos( &T, tids[seqname], pos, strand )
+
+        cdef char** seq_names = <char**>malloc( len(tids) * sizeof(char*) )
+        for (seqname,tid) in tids.iteritems():
+            seq_names[tid] = strdup(seqname)
+        T.seq_names = seq_names
+
+        self.cthis = train_sequencing_bias2( ref_fn, &T, 0, L, R, 0, 1.0 )
+
+        table_destroy( &T )
+
+        for tid in xrange(len(tids)):
+            free( <void*>seq_names[tid] )
+        free(<void*>seq_names)
+
+
+    def print_model_graph( self ):
+        cdef char* c_dot_str
+        c_dot_str = self.cthis.print_model_graph()
+        dot_str = <str>c_dot_str
+        stdlib.free( <void*>c_dot_str )
+
+        return dot_str
+
+    def __dealloc__( self ):
+        del_sequencing_bias( self.cthis )
+
+
+
+

@@ -656,7 +656,7 @@ void train_motifs( motif& M0, motif& M1,
         failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
-    double (*compute_ic)( double, double, double, double ) = aic;
+    double (*compute_ic)( double, double, double, double ) = bic;
 
 
     size_t i, j;
@@ -845,7 +845,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
         failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
-    double (*compute_ic)( double, double, double, double ) = aic;
+    double (*compute_ic)( double, double, double, double ) = bic;
 
     size_t i, j;
     size_t i_last;
