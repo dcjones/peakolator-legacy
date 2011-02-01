@@ -173,16 +173,20 @@ void context::adjust_interval_by_coverage( interval& I ) const
 
     /* extend end */
     if( strand == -1 || strand == 0 ) {
-        get_coverage( I.end, I.end+1, 0 );
         limit = xs[0][ I.end - start ];
-        while( I.end <= end && cs[I.end - start] >= limit ) I.end++;
+        if( limit > 0 ) {
+            get_coverage( I.end, I.end+1, 0 );
+            while( I.end <= end && cs[I.end - start] >= limit ) I.end++;
+        }
     }
 
     /* extend start */
     if( strand == -1 || strand == 1 ) {
-        get_coverage( I.start, I.start+1, 1 );
         limit = xs[1][ I.start - start ];
-        while( I.start >= start && cs[I.start - start] >= limit ) I.start--;
+        if( limit > 0 ) {
+            get_coverage( I.start, I.start+1, 1 );
+            while( I.start >= start && cs[I.start - start] >= limit ) I.start--;
+        }
     }
 }
 

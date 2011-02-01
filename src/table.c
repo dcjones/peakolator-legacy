@@ -9,6 +9,7 @@
 
 #include "table.h"
 #include "superfasthash.h"
+#include "logger.h"
 
 
 #define INITIAL_TABLE_SIZE 10000
@@ -72,6 +73,7 @@ void table_inc( struct table* T, bam1_t* read )
 
 void table_inc_pos( struct table* T, int32_t tid, int32_t p, uint32_t strand )
 {
+    /*log_printf( LOG_MSG, "%d, %d, %d\n", tid, p, strand );*/
     if( T->m == T->max_m ) rehash( T, T->n*2 );
 
     struct read_pos pos;
