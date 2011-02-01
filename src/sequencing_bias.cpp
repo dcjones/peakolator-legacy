@@ -312,8 +312,6 @@ void sequencing_bias::build( const char* ref_fn,
 
         training_seqs.push_back( new sequence( local_seq, 1 ) );
 
-        bg_samples = S[i]->count;
-
 
         /* add a background sequence */
         /* adjust the current read position randomly, and sample */
