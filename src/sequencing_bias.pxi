@@ -33,15 +33,11 @@ cdef class sequencing_bias:
 
     def train( self, ref_fn, reads_fn, n, L, R, *etc ):
 
-        cdef int c_train_backwards = 0
-        if len(etc) > 0:
-            c_train_backwards = 1 if etc[0] else 0
-
         cdef double c_complexity_penalty = 1.0
-        if len(etc) > 1:
-            c_complexity_penalty = etc[1]
+        if len(etc) > 0:
+            c_complexity_penalty = etc[0]
 
         self.cthis = train_sequencing_bias( ref_fn, reads_fn, n, L, R,
-                                            c_train_backwards, c_complexity_penalty )
+                                            c_complexity_penalty )
 
 

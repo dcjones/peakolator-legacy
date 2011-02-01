@@ -692,8 +692,15 @@ void train_motifs( motif& M0, motif& M1,
     
 
     /* keeping track of the optimal edge */
-    double ic, ic_curr, ic_best;
-    size_t j_best, i_best;
+    double ic, ic_curr;
+           
+    size_t i_last;
+
+    double ic_forw_best;
+    size_t j_forw_best, i_forw_best;
+
+    double ic_back_best;
+    size_t j_back_best, i_back_best;
 
 
     /* parameters to compute information criterion */
@@ -717,9 +724,11 @@ void train_motifs( motif& M0, motif& M1,
 
         log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round_num, ic_curr );
 
-        ic_best = -HUGE_VAL;
-        j_best = i_best = 0;
+        ic_forw_best = ic_back_best = -HUGE_VAL;
+        j_forw_best = i_forw_best = j_back_best = i_back_best = 0;
 
+
+        /* search forwards */
         for( j = 0; j < M0.n; j++ ) {
 
             if( M0.has_edge( j, j ) ) {
@@ -739,7 +748,7 @@ void train_motifs( motif& M0, motif& M1,
                     continue;
                 }
 
-                log_puts( LOG_MSG, "." );
+                log_puts( LOG_MSG, "+" );
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
@@ -771,10 +780,10 @@ void train_motifs( motif& M0, motif& M1,
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-                if( ic > ic_best ) {
-                    ic_best = ic;
-                    i_best = i;
-                    j_best = j;
+                if( ic > ic_forw_best ) {
+                    ic_forw_best = ic;
+                    i_forw_best = i;
+                    j_forw_best = j;
                 }
         
 
@@ -798,120 +807,7 @@ void train_motifs( motif& M0, motif& M1,
             }
         }
 
-        log_puts( LOG_MSG, "\n" );
-
-        if( ic_best <= ic_curr || ic_best == -HUGE_VAL ) break;
-
-        ic_curr = ic_best;
-
-        M0.add_edge( i_best, j_best, training_seqs );
-        M1.add_edge( i_best, j_best, training_seqs );
-
-        vecsubcol( l0, L0, n, m, j_best );
-        vecsubcol( l1, L1, n, m, j_best );
-
-        M0.update_likelihood_column( L0, n, m, j_best, training_seqs );
-        M1.update_likelihood_column( L1, n, m, j_best, training_seqs );
-
-        vecaddcol( l0, L0, n, m, j_best );
-        vecaddcol( l1, L1, n, m, j_best );
-    }
-
-
-
-    delete[] cs;
-    delete[] L0;
-    delete[] L1;
-    delete[] l0;
-    delete[] l1;
-    delete[] b0;
-    delete[] b1;
-    
-    log_unindent();
-}
-
-
-
-
-void train_motifs_backwards( motif& M0, motif& M1,
-                             const std::deque<sequence*>* training_seqs,
-                             size_t max_dep_dist, double complexity_penalty )
-{
-    log_puts( LOG_MSG, "training motifs (backwards) ...\n" );
-    log_indent();
-
-
-    if( M0.n != M1.n ) {
-        failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
-    }
-
-    double (*compute_ic)( double, double, double, double ) = bic;
-
-    size_t i, j;
-    size_t i_last;
-
-    const size_t n = training_seqs->size();
-    const size_t m = M0.n;
-
-    /* likelihood matrices: 
-     * Lk_ij gives the likelihood of training example i on node j in model k.
-     */
-    double* L0 = new double[ n * m ]; memset( (void*)L0, 0, n * m * sizeof(double) );
-    double* L1 = new double[ n * m ]; memset( (void*)L1, 0, n * m * sizeof(double) );
-
-    /* likelihood vectors:
-     * summed columns of L0, L1, maintained to minimize redundant computation.
-     * */
-    double* l0 = new double[ n ]; memset( (void*)l0, 0, n * sizeof(double) );
-    double* l1 = new double[ n ]; memset( (void*)l1, 0, n * sizeof(double) );
-
-
-    /* 0-1 vectors giving labeling each sequence as foreground or background */
-    int* cs = new int[ training_seqs->size() ];
-
-    for( i = 0; i < training_seqs->size(); i++ ) {
-        cs[i] = (*training_seqs)[i]->c;
-    }
-
-
-    /* backup likelihood matrix columns, to restore state after trying a new edge */
-    double* b0 = new double[ n ];
-    double* b1 = new double[ n ];
-    
-
-
-    /* keeping track of the optimal edge */
-    double ic, ic_curr, ic_best;
-    size_t j_best, i_best;
-
-
-    /* start with all edges */
-    M0.add_all_edges( training_seqs );
-    M1.add_all_edges( training_seqs );
-
-
-    /* parameters to compute information criterion */
-    double n_obs    = training_seqs->size();
-    double n_params = M0.num_params() + M1.num_params();
-
-
-    /* log conditional likelihood */
-    double l; 
-
-    /* baseline ic */
-    l = conditional_likelihood( n, l0, l1, cs );
-    ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
-
-    size_t round = 0;
-
-    while( true ) {
-        round++;
-
-        log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round, ic_curr );
-
-        ic_best = -HUGE_VAL;
-        j_best = i_best = 0;
-
+        /* search backwards */
         for( j = 0; j < M0.n; j++ ) {
 
             /* do not remove the position unless it has no edges */
@@ -921,7 +817,7 @@ void train_motifs_backwards( motif& M0, motif& M1,
 
                 if( !M0.has_edge( i, j ) ) continue;
 
-                log_puts( LOG_MSG, "." );
+                log_puts( LOG_MSG, "-" );
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
@@ -936,8 +832,8 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 M1.remove_edge( i, j, training_seqs );
 
                 /* evaluate likelihoods for that column */
-                M0.update_likelihood_column( L0, j, n, m, training_seqs );
-                M1.update_likelihood_column( L1, j, n, m, training_seqs );
+                M0.update_likelihood_column( L0, n, m, j, training_seqs );
+                M1.update_likelihood_column( L1, n, m, j, training_seqs );
 
                 /* update training example likelihoods */
                 vecsub( l0, b0, n );
@@ -951,10 +847,10 @@ void train_motifs_backwards( motif& M0, motif& M1,
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-                if( ic > ic_best ) {
-                    ic_best = ic;
-                    i_best = i;
-                    j_best = j;
+                if( ic > ic_back_best ) {
+                    ic_back_best = ic;
+                    i_back_best = i;
+                    j_back_best = j;
                 }
 
                 /* replace edge */
@@ -977,27 +873,48 @@ void train_motifs_backwards( motif& M0, motif& M1,
             }
         }
 
+
+
         log_puts( LOG_MSG, "\n" );
 
+        if( std::max( ic_forw_best, ic_back_best ) <= ic_curr ) break;
 
-        if( ic_best <= ic_curr || ic_best == -HUGE_VAL ) break;
+        if( ic_forw_best > ic_back_best ) {
+            log_printf( LOG_MSG, " [+] %zu->%zu\n", i_forw_best, j_forw_best );
 
-        ic_curr = ic_best;
+            ic_curr = ic_forw_best;
 
-        M0.remove_edge( i_best, j_best, training_seqs );
-        M1.remove_edge( i_best, j_best, training_seqs );
+            M0.add_edge( i_forw_best, j_forw_best, training_seqs );
+            M1.add_edge( i_forw_best, j_forw_best, training_seqs );
 
-        vecsubcol( l0, L0, n, m, j_best );
-        vecsubcol( l1, L1, n, m, j_best );
+            vecsubcol( l0, L0, n, m, j_forw_best );
+            vecsubcol( l1, L1, n, m, j_forw_best );
 
-        M0.update_likelihood_column( L0, n, m, j_best, training_seqs );
-        M1.update_likelihood_column( L1, n, m, j_best, training_seqs );
+            M0.update_likelihood_column( L0, n, m, j_forw_best, training_seqs );
+            M1.update_likelihood_column( L1, n, m, j_forw_best, training_seqs );
 
-        vecaddcol( l0, L0, n, m, j_best );
-        vecaddcol( l1, L1, n, m, j_best );
+            vecaddcol( l0, L0, n, m, j_forw_best );
+            vecaddcol( l1, L1, n, m, j_forw_best );
+        }
+        else {
+            log_printf( LOG_MSG, " [-] %zu->%zu\n", i_back_best, j_back_best );
+            ic_curr = ic_back_best;
+
+            M0.remove_edge( i_back_best, j_back_best, training_seqs );
+            M1.remove_edge( i_back_best, j_back_best, training_seqs );
+
+            vecsubcol( l0, L0, n, m, j_back_best );
+            vecsubcol( l1, L1, n, m, j_back_best );
+
+            M0.update_likelihood_column( L0, n, m, j_back_best, training_seqs );
+            M1.update_likelihood_column( L1, n, m, j_back_best, training_seqs );
+
+            vecaddcol( l0, L0, n, m, j_back_best );
+            vecaddcol( l1, L1, n, m, j_back_best );
+        }
     }
 
-    
+
 
     delete[] cs;
     delete[] L0;
@@ -1006,8 +923,9 @@ void train_motifs_backwards( motif& M0, motif& M1,
     delete[] l1;
     delete[] b0;
     delete[] b1;
-
+    
     log_unindent();
 }
+
 
 

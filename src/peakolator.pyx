@@ -333,7 +333,7 @@ cdef class motif:
             seq_names[tid] = strdup(seqname)
         T.seq_names = seq_names
 
-        self.cthis = train_sequencing_bias2( ref_fn, &T, 0, L, R, 0, 1.0 )
+        self.cthis = train_sequencing_bias2( ref_fn, &T, 0, L, R, 1.0 )
 
         table_destroy( &T )
 

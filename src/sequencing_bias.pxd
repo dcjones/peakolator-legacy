@@ -30,11 +30,11 @@ cdef extern from "sequencing_bias.hpp":
 
     c_sequencing_bias* train_sequencing_bias "new sequencing_bias" (
            char* ref_fn, char* reads_fn, size_t n, int L, int R,
-           int train_backwards, double complexity_penalty )
+           double complexity_penalty )
 
     c_sequencing_bias* train_sequencing_bias2 "new sequencing_bias" (
            char* ref_fn, table* T, size_t n, int L, int R,
-           int train_backwards, double complexity_penalty )
+           double complexity_penalty )
 
     void del_sequencing_bias "delete" ( c_sequencing_bias* )
 

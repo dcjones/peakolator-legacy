@@ -82,26 +82,24 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
                                   size_t n, pos L, pos R,
-                                  bool   train_backwards,
                                   double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, reads_fn, n, L, R, train_backwards, complexity_penalty );
+    build( ref_fn, reads_fn, n, L, R, complexity_penalty );
 }
 
 
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   table* T, size_t n,
                                   pos L, pos R,
-                                  bool   train_backwards,
                                   double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, T, n, L, R, train_backwards, complexity_penalty );
+    build( ref_fn, T, n, L, R, complexity_penalty );
 }
 
 
@@ -185,7 +183,6 @@ void sequencing_bias::clear()
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
                              size_t n, pos L, pos R,
-                             bool   train_backwards,
                              double complexity_penalty )
 {
     log_puts( LOG_MSG, "Determining sequencing bias...\n" );
@@ -204,7 +201,7 @@ void sequencing_bias::build( const char* ref_fn,
     table T;
     hash_reads( &T, reads_f, 0 );
 
-    build( ref_fn, &T, L, R, train_backwards, complexity_penalty );
+    build( ref_fn, &T, n, L, R, complexity_penalty );
 
     table_destroy(&T);
     samclose(reads_f);
@@ -221,12 +218,11 @@ void sequencing_bias::build( const char* ref_fn,
 void sequencing_bias::build( const char* ref_fn,
                              table* T, size_t n,
                              pos L, pos R,
-                             bool   train_backwards,
                              double complexity_penalty )
 {
     clear();
 
-    this->ref_fn   = strdup(ref_fn);
+    this->ref_fn = strdup(ref_fn);
     
     this->L = L;
     this->R = R;
@@ -238,6 +234,7 @@ void sequencing_bias::build( const char* ref_fn,
     log_puts( LOG_MSG, "shuffling ... " );
     struct hashed_value** S;
     table_sort_by_seq_rand( T, &S );
+    //table_sort_by_seq_count( T, &S );
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -323,7 +320,7 @@ void sequencing_bias::build( const char* ref_fn,
              * itself. */
             memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
 
-            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
+            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 50 ) );
 
             if( bg.strand ) {
                 if( bg.pos < R ) continue;
@@ -344,11 +341,7 @@ void sequencing_bias::build( const char* ref_fn,
     M0 = new motif( L+1+R, max_k, 0 );
     M1 = new motif( L+1+R, max_k, 1 );
 
-    if( train_backwards ) {
-        train_motifs_backwards( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
-    } else {
-        train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
-    }
+    train_motifs( *M0, *M1, &training_seqs, max_dep_dist, complexity_penalty );
 
 
     std::deque<sequence*>::iterator i_seq;
