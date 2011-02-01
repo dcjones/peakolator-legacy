@@ -252,7 +252,7 @@ void sequencing_bias::build( const char* ref_fn,
 
 
     /* background sampling */
-    const size_t bg_samples = 1; // make this many samples for each read
+    size_t bg_samples = 1; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
     struct read_pos bg;          // background position being considered
     
@@ -307,9 +307,12 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
         }
 
-        log_printf( LOG_MSG, "seq: %s\n", local_seq );
+        //log_printf( LOG_MSG, "seq: %s\n", local_seq );
+
 
         training_seqs.push_back( new sequence( local_seq, 1 ) );
+
+        bg_samples = S[i]->count;
 
 
         /* add a background sequence */
@@ -320,7 +323,7 @@ void sequencing_bias::build( const char* ref_fn,
              * itself. */
             memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
 
-            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 50 ) );
+            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 5 ) );
 
             if( bg.strand ) {
                 if( bg.pos < R ) continue;
