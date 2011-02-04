@@ -301,7 +301,10 @@ double context::min_rate( const subinterval_bound& B, pos d_min, int strand ) co
 {
     if( B.disjoint_bounds() ) {
         return rate( B.I_max, B.J_min, strand );
-        /* TODO: incorrect when B.J_min - B.I_max + 1 < d_min */
+        /* NOTE: this is incorrect when B.J_min - B.I_max + 1 < d_min, but
+         * it will only underestimate min rate, thus the bound will still be
+         * correct, just not as tight.
+         */
     }
 
     else if( B.equal_bounds() ) {

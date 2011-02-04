@@ -629,6 +629,12 @@ double aic( double L, double n_obs, double n_params, double c = 1.0 )
     return L - c*n_params*n_obs / (n_obs - n_params - 1.0);
 }
 
+double caic( double L, double n_obs, double n_params, double c = 1.0 )
+{
+    return L - c*n_params -
+            2 * (n_params + 1) * (n_params + 2) / (n_obs - n_params - 2);
+}
+
 /* Bayesian (Schwarz) Information Criterion */
 double bic( double L, double n_obs, double n_params, double c = 1.0 )
 {
@@ -656,7 +662,7 @@ void train_motifs( motif& M0, motif& M1,
         failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
-    double (*compute_ic)( double, double, double, double ) = bic;
+    double (*compute_ic)( double, double, double, double ) = caic;
 
 
     size_t i, j;

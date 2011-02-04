@@ -321,7 +321,7 @@ void sequencing_bias::build( const char* ref_fn,
              * itself. */
             memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
 
-            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 5 ) );
+            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
 
             if( bg.strand ) {
                 if( bg.pos < R ) continue;
