@@ -12,8 +12,12 @@
 class dataset
 {
     public:
-        dataset( const char* reads_fn, sequencing_bias* sb );
+        dataset( const char* reads_fn );
         dataset* copy() const;
+
+        void fit_sequence_bias( const char* ref_fn,
+                                size_t max_reads, pos L, pos R,
+                                double complexity_penalty = 1.0 );
 
         void fit_null_distr( interval_stack* is, double* r, double* p );
         void hash_reads( table* T, interval_stack* is );
@@ -31,6 +35,10 @@ class dataset
         samfile_t*   reads_f;
         bam_index_t* reads_index;
         char*        reads_fn;
+
+        /* indexed read counts */
+        table T;
+        read_counts counts;
 
         friend class context;
 };

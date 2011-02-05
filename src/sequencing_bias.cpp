@@ -45,6 +45,13 @@ static double rand_gauss( double sigma )
 const double sequencing_bias::pseudocount = 1;
 
 
+int read_pos_tid_compare( const void* p1, const void* p2 )
+{
+    return ((read_pos*)p1)->tid - ((read_pos*)p2)->tid;
+}
+
+
+
 sequencing_bias::sequencing_bias()
     : ref_f(NULL)
     , ref_fn(NULL)
@@ -78,28 +85,28 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
 }
 
 
-
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
-                                  size_t n, pos L, pos R,
+                                  size_t max_reads, pos L, pos R,
                                   double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, reads_fn, n, L, R, complexity_penalty );
+    build( ref_fn, reads_fn, max_reads, L, R, complexity_penalty );
 }
 
 
+
 sequencing_bias::sequencing_bias( const char* ref_fn,
-                                  table* T, size_t n,
+                                  table* T, size_t max_reads,
                                   pos L, pos R,
                                   double complexity_penalty )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, T, n, L, R, complexity_penalty );
+    build( ref_fn, T, max_reads, L, R, complexity_penalty );
 }
 
 
@@ -180,43 +187,60 @@ void sequencing_bias::clear()
 }
 
 
+
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
-                             size_t n, pos L, pos R,
+                             size_t max_reads, pos L, pos R,
                              double complexity_penalty )
 {
-    log_puts( LOG_MSG, "Determining sequencing bias...\n" );
+    log_printf( LOG_MSG, "hashing reads ... \n" );
     log_indent();
-
-    clock_t t0, t1;
-    t0 = clock();
-
 
     samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
     if( reads_f == NULL ) {
-        failf( "Can't open bam file '%s'.\n", reads_fn );
+        failf( "Can't open bam file '%s'.", reads_fn );
     }
 
-    /* find the first n unique reads by hashing */
+    bam_index_t* reads_index = bam_index_load( reads_fn );
+    if( reads_index == NULL ) {
+        failf( "Can't open bam index '%s.bai'.", reads_fn );
+    }
+
+    bam_init_header_hash( reads_f->header );
+
+    bam1_t* read = bam_init1();
+
     table T;
-    hash_reads( &T, reads_f, 0 );
+    table_create( &T, reads_f->header->n_targets );
 
-    build( ref_fn, &T, n, L, R, complexity_penalty );
+    size_t k = 0;
 
-    table_destroy(&T);
-    samclose(reads_f);
+    while( samread( reads_f, read ) > 0 ) {
+        k++;
+        if( k % 1000000 == 0 ) {
+            log_printf( LOG_MSG, "%zu reads\n", k );
+        }
+        table_inc( &T, read );
 
-    t1 = clock();
-    log_printf( LOG_MSG, "finished in %0.2f seconds\n",
-                         (double)(t1-t0)/(double)CLOCKS_PER_SEC );
+        if( T.m >= max_reads ) break;
+    }
 
+    bam_destroy1(read);
+
+    log_puts( LOG_MSG, "done.\n" );
     log_unindent();
+
+    build( ref_fn, &T, max_reads, L, R, complexity_penalty );
+
+    table_destroy( &T );
+
+    bam_index_destroy(reads_index);
+    samclose( reads_f );
 }
 
 
-
 void sequencing_bias::build( const char* ref_fn,
-                             table* T, size_t n,
+                             table* T, size_t max_reads,
                              pos L, pos R,
                              double complexity_penalty )
 {
@@ -230,12 +254,16 @@ void sequencing_bias::build( const char* ref_fn,
     unsigned int i;
 
 
-    /* sort by position */
     log_puts( LOG_MSG, "shuffling ... " );
+
     read_pos* S;
     size_t N;
-    table_dump( T, &S, &N );
+    table_dump( T, &S, &N, max_reads );
+
+    /* shuffle, then sort by position */
     shuffle_array( S, N );
+    qsort( S, N, sizeof(read_pos), read_pos_tid_compare );
+
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -268,7 +296,7 @@ void sequencing_bias::build( const char* ref_fn,
     local_seq[L+R+1] = '\0';
 
 
-    for( i = 0; (n == 0 || i < n) && i < N; i++ ) {
+    for( i = 0; i < N; i++ ) {
 
         /* Load/switch sequences (chromosomes) as they are encountered in the
          * read stream. The idea here is to avoid thrashing by loading a large
@@ -362,25 +390,6 @@ sequencing_bias::~sequencing_bias()
     clear();
 }
 
-
-
-void sequencing_bias::hash_reads( table* T, samfile_t* reads_f, size_t limit ) const
-{
-    log_puts( LOG_MSG, "hashing read positions..." );
-
-    table_create( T, reads_f->header->n_targets );
-    T->seq_names = reads_f->header->target_name;
-
-    bam1_t* read = bam_init1();
-
-    while( (limit == 0 || T->m < limit) && samread( reads_f, read ) > 0 ) {
-        table_inc( T, read );
-    }
-
-    bam_destroy1(read);
-
-    log_puts( LOG_MSG, "done.\n" );
-}
 
 
 double* sequencing_bias::get_bias( const char* seqname, pos start, pos end, int strand )

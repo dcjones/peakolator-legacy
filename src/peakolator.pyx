@@ -139,19 +139,19 @@ cdef class dataset:
     def __dealloc__( self ):
         del_dataset( self.cthis )
 
-    def init( self, reads_fn, sequencing_bias bias = None ):
+    def init( self, reads_fn ):
 
         if self.cthis:
             del_dataset( self.cthis )
 
-        if bias is None:
-            self.cthis = new_dataset( reads_fn, NULL )
-        else:
-            self.cthis = new_dataset( reads_fn, bias.cthis )
+        self.cthis = new_dataset( reads_fn )
 
 
     def get_bias( self, chrom, start, end, strand ):
+        if self.cthis.bias == NULL: return None
+
         cdef double* c_ws
+
         c_ws = self.cthis.bias.get_bias( chrom, start, end, strand )
 
         cdef int i
@@ -160,6 +160,7 @@ cdef class dataset:
             ws[i] = c_ws[i]
 
         return ws
+
 
     def print_model_graph( self ):
 
@@ -177,6 +178,9 @@ cdef class dataset:
         cdef dataset ds = dataset()
         ds.cthis = self.cthis.copy()
         return ds
+
+    def fit_sequence_bias( self, ref_fn, max_reads, L, R, complexity_penalty = 1.0 ):
+        self.cthis.fit_sequence_bias( ref_fn, max_reads, L, R, complexity_penalty )
 
 
     def fit_null_distr( self, train ):

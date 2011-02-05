@@ -346,9 +346,9 @@ void context::print_adjusted_unadjusted_bias( FILE* out_f )
     int i;
     for( s = s0; s <= s1; s++ ) {
         for( i = 0; i < length(); i++ ) {
-            fprintf( out_f, "unadjusted\t%ld\t%ld\n", start+i, xs[s][i] );
-            fprintf( out_f, "adjusted\t%ld\t%.5e\n", start+i, rs[s][i]*(double)xs[s][i] );
-            fprintf( out_f, "bias\t%ld\t%.5e\n",     start+i, rs[s][i] );
+            fprintf( out_f, "unadjusted\t%ld\t%u\n",  start+i, xs[s][i] );
+            fprintf( out_f, "adjusted\t%ld\t%.5e\n" , start+i, rs[s][i]*(double)xs[s][i] );
+            fprintf( out_f, "bias\t%ld\t%.5e\n",      start+i, rs[s][i] );
         }
     }
 

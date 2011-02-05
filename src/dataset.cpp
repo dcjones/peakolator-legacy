@@ -19,11 +19,13 @@
 
 using namespace std;
 
-dataset::dataset( const char* reads_fn, sequencing_bias* bias )
+dataset::dataset( const char* reads_fn )
+    : bias(NULL)
 {
-    log_printf( LOG_MSG, "loading reads from %s ... ", reads_fn );
+    log_printf( LOG_MSG, "loading reads from %s ...\n", reads_fn );
+    log_indent();
 
-    this->bias = bias;
+    /* load SAM/BAM file */
     this->reads_fn = strdup(reads_fn);
 
     reads_f = samopen( reads_fn, "rb", NULL );
@@ -38,8 +40,45 @@ dataset::dataset( const char* reads_fn, sequencing_bias* bias )
 
     bam_init_header_hash( reads_f->header );
 
+
+    /* hash reads / make read counts */
+    log_printf( LOG_MSG, "hashing ... \n" );
+    log_indent();
+    table_create( &T, n_targets() );
+    bam1_t* read = bam_init1();
+    size_t k = 0;
+
+    while( samread( reads_f, read ) > 0 ) {
+        k++;
+        if( k % 1000000 == 0 ) {
+            log_printf( LOG_MSG, "%zu reads\n", k );
+        }
+        table_inc( &T, read );
+    }
+    log_printf( LOG_MSG, "%zu reads\n", k );
+
+    log_puts( LOG_MSG, "done.\n" );
+    log_unindent();
+
+    bam_destroy1( read );
+
+    log_printf( LOG_MSG, "sorting ... " );
+    read_counts_create( &counts, &T );
+    log_printf( LOG_MSG, "done." );
+
+    log_unindent();
     log_puts( LOG_MSG, "done.\n" );
 }
+
+
+void dataset::fit_sequence_bias( const char* ref_fn,
+                                 size_t max_reads, pos L, pos R,
+                                 double complexity_penalty )
+{
+    if( bias != NULL ) delete bias;
+    bias = new sequencing_bias( ref_fn, &T, max_reads, L, R, complexity_penalty );
+}
+
 
 dataset::dataset()
 {
@@ -65,11 +104,16 @@ dataset* dataset::copy() const
 
     pd->reads_fn = strdup(reads_fn);
 
+    table_copy( &pd->T, &T );
+    read_counts_copy( &pd->counts, &counts );
+
     return pd;
 }
 
 dataset::~dataset()
 {
+    table_destroy( &T );
+    read_counts_destroy( &counts );
     bam_index_destroy(reads_index);
     samclose(reads_f);
     free(reads_fn);

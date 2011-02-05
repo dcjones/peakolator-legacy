@@ -3,20 +3,21 @@
 
 
 
-/* From: http://planetmath.org/encyclopedia/GoodHashTablePrimes.html */
-static const size_t num_primes = 26;
-static const uint32_t primes[] = {
-/*                                 53,         97, */
-/*          193,       389,       769,       1543, */
-         3079,      6151,     12289,      24593,
-        49157,     98317,    196613,     393241,
-       786433,   1572869,   3145739,    6291469,
-     12582917,  25165843,  50331653,  100663319,
-    201326611, 402653189, 805306457, 1610612741 };
+#define NUM_PRIMES 28
+static const uint32_t primes[NUM_PRIMES] = {
+           53U,         97U,        193U,        389U,    
+          769U,       1543U,       3079U,       6151U,  
+        12289U,      24593U,      49157U,      98317U,  
+       196613U,     393241U,     786433U,    1572869U, 
+      3145739U,    6291469U,   12582917U,   25165843U,
+     50331653U,  100663319U,  201326611U,  402653189U,
+    805306457U, 1610612741U, 3221225473U, 4294967291U };
 
 
 static const double max_load = 0.75;
 
+/* marks a vacant cell */
+static const int32_t nilpos = -1;
 
 
 
@@ -52,10 +53,25 @@ void subtable_create( struct subtable* T )
     T->A = malloc(sizeof(struct hashed_value)*primes[T->n]);
     size_t i;
     for( i = 0; i < primes[T->n]; i++ ) {
-        T->A[i].pos = -1;
+        T->A[i].pos = nilpos;
         T->A[i].count = 0;
     }
     T->max_m = (size_t)(((double)primes[T->n]) * max_load);
+}
+
+
+void subtable_copy( struct subtable* T, const struct subtable* U )
+{
+    T->n     = U->n;
+    T->m     = U->m;
+    T->max_m = U->max_m;
+    T->A     = malloc(sizeof(struct hashed_value)*primes[T->n]);
+
+    size_t i;
+    for( i = 0; i < primes[T->n]; i++ ) {
+        T->A[i].pos   = U->A[i].pos;
+        T->A[i].count = U->A[i].pos;
+    }
 }
 
 
@@ -77,11 +93,11 @@ bool subtable_inc( struct subtable* T, int32_t pos )
     uint32_t i = 1;
     uint32_t j = h % primes[T->n];
 
-    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+    while( T->A[j].pos != nilpos && T->A[j].pos != pos ) {
         j = probe( h, ++i ) % primes[T->n];
     }
 
-    if( T->A[j].pos == -1 ) {
+    if( T->A[j].pos == nilpos ) {
         T->A[j].pos = pos;
         T->A[j].count = 1;
         T->m++;
@@ -102,11 +118,11 @@ void subtable_set( struct subtable* T, int32_t pos, uint32_t count )
     uint32_t i = 1;
     uint32_t j = h % primes[T->n];
 
-    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+    while( T->A[j].pos != nilpos && T->A[j].pos != pos ) {
         j = probe( h, ++i ) % primes[T->n];
     }
 
-    if( T->A[j].pos == -1 ) {
+    if( T->A[j].pos == nilpos ) {
         T->A[j].pos = pos;
         T->A[j].count = count;
     }
@@ -119,7 +135,7 @@ void subtable_set( struct subtable* T, int32_t pos, uint32_t count )
 
 void subtable_rehash( struct subtable* T, size_t new_n )
 {
-    if( new_n >= num_primes ) {
+    if( new_n >= NUM_PRIMES ) {
         fail( "a table has grown too large" );
     }
 
@@ -128,7 +144,7 @@ void subtable_rehash( struct subtable* T, size_t new_n )
     U.A = malloc( sizeof(struct hashed_value) * primes[U.n] );
     size_t i;
     for( i = 0; i < primes[U.n]; i++ ) {
-        U.A[i].pos = -1;
+        U.A[i].pos = nilpos;
         U.A[i].count = 0;
     }
 
@@ -136,7 +152,7 @@ void subtable_rehash( struct subtable* T, size_t new_n )
 
 
     for( i = 0; i < primes[T->n]; i++ ) {
-        if( T->A[i].pos == -1 ) continue;
+        if( T->A[i].pos == nilpos ) continue;
         subtable_set( &U, T->A[i].pos, T->A[i].count );
     }
 
@@ -154,7 +170,7 @@ uint32_t subtable_count( struct subtable* T, int32_t pos )
     uint32_t i = 1;
     uint32_t j = h % primes[T->n];
 
-    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+    while( T->A[j].pos != nilpos && T->A[j].pos != pos ) {
         j = probe( h, ++i ) % primes[T->n];
     }
 
@@ -176,6 +192,23 @@ void table_create( struct table* T, size_t n )
     for( i = 0; i <= 1; i++ ) {
         for( j = 0; j < n; j++ ) {
             subtable_create( &T->ts[i][j] );
+        }
+    }
+}
+
+void table_copy( struct table* T, const struct table* U )
+{
+    T->seq_names = U->seq_names;
+    T->n         = U->n;
+    T->m         = U->m;
+
+    T->ts[0] = malloc( T->n * sizeof(struct subtable) );
+    T->ts[1] = malloc( T->n * sizeof(struct subtable) );
+
+    size_t i, j;
+    for( i = 0; i <= 1; i++ ) {
+        for( j = 0; j < T->n; j++ ) {
+            subtable_copy( &T->ts[i][j], &U->ts[i][j] );
         }
     }
 }
@@ -233,7 +266,118 @@ uint32_t table_count_pos( struct table* T, int32_t tid, int32_t pos, uint32_t st
 }
 
 
-void table_dump( struct table* T, struct read_pos** A_, size_t* N_ )
+
+int hashed_value_compare( const void* p1, const void* p2 )
+{
+    return ((struct hashed_value*)p1)->pos - ((struct hashed_value*)p2)->pos;
+}
+
+
+void read_counts_create( struct read_counts* C, const struct table* T )
+{
+    C->n = T->n;
+    C->m = T->m;
+    C->seq_names   = T->seq_names;
+
+    C->mss[0] = malloc( C->n * sizeof(size_t) );
+    C->mss[1] = malloc( C->n * sizeof(size_t) );
+    
+    C->xss[0] = malloc( C->n * sizeof(struct hashed_value*) );
+    C->xss[1] = malloc( C->n * sizeof(struct hashed_value*) );
+
+    int32_t  tid;
+    uint32_t strand;
+    size_t i, j;
+
+    size_t m, n;
+    struct hashed_value* ys;
+    struct hashed_value* xs;
+
+
+    for( strand = 0; strand <= 1; strand++ ) {
+        for( tid = 0; tid < T->n; tid++ ) {
+            m  = T->ts[strand][tid].m;
+            n  = T->ts[strand][tid].n;
+            ys = T->ts[strand][tid].A;
+            xs = malloc( m * sizeof(struct hashed_value) );
+
+            for( i = 0, j = 0; j < n; j++ ) {
+                if( ys[j].pos != nilpos ) {
+                    xs[i].pos   = ys[i].pos;
+                    xs[i].count = ys[i].count;
+                    i++;
+                }
+            }
+
+            qsort( xs, m, sizeof(struct hashed_value), hashed_value_compare );
+
+            C->mss[strand][tid] = m;
+            C->xss[strand][tid] = xs;
+        }
+    }
+}
+
+void read_counts_copy( struct read_counts* C, const struct read_counts* B )
+{
+    C->n = B->n;
+    C->m = B->m;
+    C->seq_names = B->seq_names;
+
+    int32_t  tid;
+    uint32_t strand;
+    size_t siz;
+
+    for( strand = 0; strand <= 1; strand++ ) {
+        C->mss[strand] = malloc( C->n * sizeof(size_t) );
+        for( tid = 0; tid < C->n; tid++ ) {
+            C->mss[strand][tid] = B->mss[strand][tid];
+            siz = C->mss[strand][tid] * sizeof(struct hashed_value);
+            C->xss[strand][tid] = malloc( siz );
+            memcpy( C->xss[strand][tid], B->xss[strand][tid], siz );
+        }
+    }
+}
+
+
+void read_counts_destroy( struct read_counts* C )
+{
+    int32_t  tid;
+    uint32_t strand;
+
+    for( strand = 0; strand <= 1; strand++ ) {
+        for( tid = 0; tid < C->n; tid++ ) {
+            free( C->xss[strand][tid] );
+            C->xss[strand][tid] = NULL;
+        }
+    }
+
+    free( C->mss[0] ); C->mss[0] = NULL;
+    free( C->mss[1] ); C->mss[1] = NULL;
+
+    free( C->xss[0] ); C->xss[0] = NULL;
+    free( C->xss[1] ); C->xss[1] = NULL;
+}
+
+
+
+
+unsigned int read_counts_count( const struct read_counts* C,
+                               int32_t tid, int32_t start, int32_t end, uint32_t strand )
+{
+    /* TODO */
+    return 0;
+}
+
+unsigned int read_counts_total( const struct read_counts* C,
+                               int32_t tid, int32_t start, int32_t end, uint32_t strand )
+{
+    /* TODO */
+    return 0;
+}
+
+
+
+void table_dump( struct table* T, struct read_pos** A_, size_t* N_, size_t limit )
 {
     struct read_pos* A;
     size_t N = 0;
@@ -245,6 +389,8 @@ void table_dump( struct table* T, struct read_pos** A_, size_t* N_ )
             N += T->ts[i][j].m;
         }
     }
+
+    if( limit > 0 && N > limit ) N = limit;
 
     A = malloc( N * sizeof(struct read_pos) );
 
@@ -260,17 +406,16 @@ void table_dump( struct table* T, struct read_pos** A_, size_t* N_ )
                     A[u].pos    = T->ts[i][j].A[v].pos;
                     A[u].count  = T->ts[i][j].A[v].count;
                     u++;
+                    if( u >= N ) goto table_dump_finish;
                 }
             }
         }
     }
+table_dump_finish:
 
     *A_ = A;
     *N_ = N;
 }
-
-
-
 
 
 

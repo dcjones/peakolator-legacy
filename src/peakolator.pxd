@@ -82,7 +82,11 @@ cdef extern from "dataset.hpp":
 
     ctypedef struct c_dataset "dataset":
         c_dataset* copy()
+
+        void fit_sequence_bias( char* ref_fn, size_t max_reads, pos L, pos R,
+                                double complexity_penalty )
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
+
         void hash_reads( table* T, c_interval_stack* I )
         size_t n_targets()
 
@@ -90,9 +94,7 @@ cdef extern from "dataset.hpp":
 
 
 
-    c_dataset* new_dataset "new dataset" ( \
-            char* bam_fn, \
-            c_sequencing_bias* )
+    c_dataset* new_dataset "new dataset" ( char* bam_fn )
 
     void del_dataset "delete" ( c_dataset* dataset )
 

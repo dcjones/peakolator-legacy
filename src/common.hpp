@@ -8,8 +8,8 @@
 #include "samtools/bam.h"
 
 
-typedef long          pos;     /* genomic position */
-typedef unsigned long rcount;  /* read count */
+typedef long         pos;     /* genomic position */
+typedef unsigned int rcount;  /* read count */
 
 const rcount rcount_nan = (rcount)-1;
 
