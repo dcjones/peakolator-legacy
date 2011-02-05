@@ -232,9 +232,10 @@ void sequencing_bias::build( const char* ref_fn,
 
     /* sort by position */
     log_puts( LOG_MSG, "shuffling ... " );
-    struct hashed_value** S;
-    table_sort_by_seq_rand( T, &S );
-    //table_sort_by_seq_count( T, &S );
+    read_pos* S;
+    size_t N;
+    table_dump( T, &S, &N );
+    shuffle_array( S, N );
     log_puts( LOG_MSG, "done.\n" );
 
 
@@ -254,7 +255,7 @@ void sequencing_bias::build( const char* ref_fn,
     /* background sampling */
     size_t bg_samples = 1; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
-    struct read_pos bg;          // background position being considered
+    pos bg_pos;
     
     int b;
     char*          seqname   = NULL;
@@ -267,14 +268,14 @@ void sequencing_bias::build( const char* ref_fn,
     local_seq[L+R+1] = '\0';
 
 
-    for( i = 0; (n == 0 || i < n) && i < T->m; i++ ) {
+    for( i = 0; (n == 0 || i < n) && i < N; i++ ) {
 
         /* Load/switch sequences (chromosomes) as they are encountered in the
          * read stream. The idea here is to avoid thrashing by loading a large
          * sequence, but also avoid overloading memory by only loading one
          * chromosome at a time. */
-        if( S[i]->pos.tid != curr_tid ) {
-            seqname = T->seq_names[ S[i]->pos.tid ];
+        if( S[i].tid != curr_tid ) {
+            seqname = T->seq_names[ S[i].tid ];
             if( seq ) free(seq); 
 
             log_printf( LOG_MSG, "reading sequence '%s' ... ", seqname );
@@ -288,7 +289,7 @@ void sequencing_bias::build( const char* ref_fn,
                 for( char* c = seq; *c; c++ ) *c = tolower(*c);
             }
 
-            curr_tid = S[i]->pos.tid;
+            curr_tid = S[i].tid;
 
             log_puts( LOG_MSG, "done.\n" );
         }
@@ -297,17 +298,17 @@ void sequencing_bias::build( const char* ref_fn,
 
 
         /* add a foreground sequence */
-        if( S[i]->pos.strand ) {
-            if( S[i]->pos.pos < R ) continue;
-            memcpy( local_seq, seq + S[i]->pos.pos - R, (L+1+R)*sizeof(char) );
+        if( S[i].strand ) {
+            if( S[i].pos < R ) continue;
+            memcpy( local_seq, seq + S[i].pos - R, (L+1+R)*sizeof(char) );
             seqrc( local_seq, L+1+R );
         }
         else {
-            if( S[i]->pos.pos < L ) continue;
-            memcpy( local_seq, seq + (S[i]->pos.pos-L), (L+1+R)*sizeof(char) );
+            if( S[i].pos < L ) continue;
+            memcpy( local_seq, seq + (S[i].pos-L), (L+1+R)*sizeof(char) );
         }
 
-        log_printf( LOG_MSG, "seq (%d): %s\n", S[i]->pos.strand, local_seq );
+        log_printf( LOG_MSG, "seq (%d): %s\n", S[i].strand, local_seq );
 
 
         training_seqs.push_back( new sequence( local_seq, 1 ) );
@@ -317,20 +318,16 @@ void sequencing_bias::build( const char* ref_fn,
         /* adjust the current read position randomly, and sample */
         for( bg_sample_num = 0; bg_sample_num < bg_samples; bg_sample_num++ ) {
 
-            /* attempt to sample a position near the current read, with no reads
-             * itself. */
-            memcpy( (void*)&bg, (void*)&S[i]->pos, sizeof(struct read_pos) );
+            bg_pos = S[i].pos + (pos)ceil( rand_gauss( 10 ) );
 
-            bg.pos = S[i]->pos.pos + (pos)ceil( rand_gauss( 10 ) );
-
-            if( bg.strand ) {
-                if( bg.pos < R ) continue;
-                memcpy( local_seq, seq + bg.pos - R, (L+1+R)*sizeof(char) );
+            if( S[i].strand ) {
+                if( bg_pos < R ) continue;
+                memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
                 seqrc( local_seq, L+1+R );
             }
             else {
-                if( bg.pos < L ) continue;
-                memcpy( local_seq, seq + (bg.pos-L), (L+1+R)*sizeof(char) );
+                if( bg_pos < L ) continue;
+                memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
             }
 
             training_seqs.push_back( new sequence( local_seq, 0 ) );
@@ -371,7 +368,7 @@ void sequencing_bias::hash_reads( table* T, samfile_t* reads_f, size_t limit ) c
 {
     log_puts( LOG_MSG, "hashing read positions..." );
 
-    table_create(T);
+    table_create( T, reads_f->header->n_targets );
     T->seq_names = reads_f->header->target_name;
 
     bam1_t* read = bam_init1();

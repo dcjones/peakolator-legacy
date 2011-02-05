@@ -6,7 +6,6 @@ bin_PROGRAMS = peakolate-seqbias
 pyexec_LTLIBRARIES = peakolator.la
 
 peakolator_la_SOURCES = table.h             table.c \
-						superfasthash.h     superfasthash.c \
 						logger.h            logger.c \
 						miscmath.hpp        miscmath.cpp \
 						annotations.hpp     annotations.cpp \
@@ -45,7 +44,6 @@ peakolate_seqbias_SOURCES = peakolate_seqbias.pyx \
 							miscmath.hpp        miscmath.cpp \
 							logger.h            logger.c \
 							table.h             table.c \
-							superfasthash.h     superfasthash.c \
 							kmers.hpp           kmers.cpp
 
 nodist_peakolate_seqbias_SOURCES = peakolate-seqbias.cpp

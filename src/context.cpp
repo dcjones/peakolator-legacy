@@ -102,6 +102,7 @@ void context::set( dataset* ds, const char* seqname,
     }
 
     bam_destroy1(read);
+    bam_iter_destroy(it);
 
 
     /* get sequencing bias */

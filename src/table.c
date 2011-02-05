@@ -1,62 +1,199 @@
-/*
- *           hash
- *           A quick and dirty hash table implementation.
- *
- *           Daniel Jones <dcjones@cs.washington.edu>
- *           July 2010
- *
- */
 
 #include "table.h"
-#include "superfasthash.h"
-#include "logger.h"
-
-
-#define INITIAL_TABLE_SIZE 10000
-#define MAX_LOAD 0.75
-#define MIN_LOAD 0.05 /* make sure this is less than MAX_LOAD/2 */
-
-
-void rehash( struct table* T, size_t new_n );
 
 
 
-/* Create an empty hash table. */
-void table_create( struct table* T )
+/* From: http://planetmath.org/encyclopedia/GoodHashTablePrimes.html */
+static const size_t num_primes = 26;
+static const uint32_t primes[] = {
+/*                                 53,         97, */
+/*          193,       389,       769,       1543, */
+         3079,      6151,     12289,      24593,
+        49157,     98317,    196613,     393241,
+       786433,   1572869,   3145739,    6291469,
+     12582917,  25165843,  50331653,  100663319,
+    201326611, 402653189, 805306457, 1610612741 };
+
+
+static const double max_load = 0.75;
+
+
+
+
+/* From Thomas Wang (http://www.cris.com/~Ttwang/tech/inthash.htm) */
+uint32_t hash( uint32_t a)
 {
-    T->A = malloc(sizeof(struct hashed_value*)*INITIAL_TABLE_SIZE);
-    memset( T->A, 0, sizeof(struct hashed_value*)*INITIAL_TABLE_SIZE );
-    T->n = INITIAL_TABLE_SIZE;
-    T->m = 0;
-    T->max_m = T->n * MAX_LOAD;
-    T->min_m = T->n * MIN_LOAD;
-    T->seq_names = NULL;
+    a = (a ^ 61) ^ (a >> 16);
+    a = a + (a << 3);
+    a = a ^ (a >> 4);
+    a = a * 0x27d4eb2d;
+    a = a ^ (a >> 15);
+    return a;
 }
 
 
 
-/* Remove all elements in the table. */
-void table_clear( struct table* T )
+/* simple quadratic probing */
+uint32_t probe( uint32_t h, uint32_t i )
 {
-    struct hashed_value* u;
+    const double c1 = 0.5;
+    const double c2 = 0.5;
+
+    return h
+           + (uint32_t)(c1 * (double)i)
+           + (uint32_t)(c2 * (double)(i*i));
+}
+
+
+void subtable_create( struct subtable* T )
+{
+    T->n = 0;
+    T->m = 0;
+    T->A = malloc(sizeof(struct hashed_value)*primes[T->n]);
     size_t i;
-    for( i = 0; i < T->n; i++ ) {
-        while( T->A[i] ){
-            u = T->A[i]->next;
-            free(T->A[i]);
-            T->A[i] = u;
+    for( i = 0; i < primes[T->n]; i++ ) {
+        T->A[i].pos = -1;
+        T->A[i].count = 0;
+    }
+    T->max_m = (size_t)(((double)primes[T->n]) * max_load);
+}
+
+
+void subtable_destroy( struct subtable* T )
+{
+    free( T->A );
+    T->A = NULL;
+}
+
+
+void subtable_rehash( struct subtable* T, size_t new_n );
+
+
+bool subtable_inc( struct subtable* T, int32_t pos )
+{
+    if( T->m == T->max_m ) subtable_rehash( T, T->n + 1 );
+
+    uint32_t h = hash( (uint32_t)pos );
+    uint32_t i = 1;
+    uint32_t j = h % primes[T->n];
+
+    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+        j = probe( h, ++i ) % primes[T->n];
+    }
+
+    if( T->A[j].pos == -1 ) {
+        T->A[j].pos = pos;
+        T->A[j].count = 1;
+        T->m++;
+        return true;
+    }
+    else {
+        T->A[j].count++;
+        return false;
+    }
+}
+
+
+void subtable_set( struct subtable* T, int32_t pos, uint32_t count )
+{
+    if( T->m == T->max_m ) subtable_rehash( T, T->n + 1 );
+
+    uint32_t h = hash( (uint32_t)pos );
+    uint32_t i = 1;
+    uint32_t j = h % primes[T->n];
+
+    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+        j = probe( h, ++i ) % primes[T->n];
+    }
+
+    if( T->A[j].pos == -1 ) {
+        T->A[j].pos = pos;
+        T->A[j].count = count;
+    }
+    else {
+        T->A[j].count = count;
+    }
+}
+
+
+
+void subtable_rehash( struct subtable* T, size_t new_n )
+{
+    if( new_n >= num_primes ) {
+        fail( "a table has grown too large" );
+    }
+
+    struct subtable U;
+    U.n = new_n;
+    U.A = malloc( sizeof(struct hashed_value) * primes[U.n] );
+    size_t i;
+    for( i = 0; i < primes[U.n]; i++ ) {
+        U.A[i].pos = -1;
+        U.A[i].count = 0;
+    }
+
+    U.max_m = (size_t)(((double)primes[U.n]) * max_load);
+
+
+    for( i = 0; i < primes[T->n]; i++ ) {
+        if( T->A[i].pos == -1 ) continue;
+        subtable_set( &U, T->A[i].pos, T->A[i].count );
+    }
+
+    free(T->A);
+    T->A = U.A;
+    T->n = U.n;
+    T->max_m = U.max_m;
+}
+
+
+
+uint32_t subtable_count( struct subtable* T, int32_t pos )
+{
+    uint32_t h = hash( (uint32_t)pos );
+    uint32_t i = 1;
+    uint32_t j = h % primes[T->n];
+
+    while( T->A[j].pos != -1 && T->A[j].pos != pos ) {
+        j = probe( h, ++i ) % primes[T->n];
+    }
+
+    if( T->A[j].pos == pos ) return T->A[j].count;
+    else                     return 0;
+}
+
+
+void table_create( struct table* T, size_t n )
+{
+    T->seq_names = NULL;
+    T->n = n;
+    T->m = 0;
+
+    T->ts[0] = malloc( n * sizeof(struct subtable) );
+    T->ts[1] = malloc( n * sizeof(struct subtable) );
+
+    size_t i, j;
+    for( i = 0; i <= 1; i++ ) {
+        for( j = 0; j < n; j++ ) {
+            subtable_create( &T->ts[i][j] );
         }
     }
-    T->m = 0;
 }
 
 
-
-/* Free all memory associated with a table. */
 void table_destroy( struct table* T )
 {
-    table_clear(T);
-    free(T->A);
+    size_t i, j;
+    for( i = 0; i <= 1; i++ ) {
+        for( j = 0; j < T->n; j++ ) {
+            subtable_destroy( &T->ts[i][j] );
+        }
+    }
+
+    free( T->ts[0] );
+    free( T->ts[1] );
+
+    T->n = 0;
 }
 
 
@@ -71,230 +208,69 @@ void table_inc( struct table* T, bam1_t* read )
 }
 
 
-void table_inc_pos( struct table* T, int32_t tid, int32_t p, uint32_t strand )
+
+void table_inc_pos( struct table* T, int32_t tid, int32_t pos, uint32_t strand )
 {
-    /*log_printf( LOG_MSG, "%d, %d, %d\n", tid, p, strand );*/
-    if( T->m == T->max_m ) rehash( T, T->n*2 );
-
-    struct read_pos pos;
-    pos.tid = tid;
-    pos.pos = p;
-    pos.strand = strand;
-
-    uint32_t h = hash((void*)&pos, sizeof(struct read_pos)) % T->n;
-
-    struct hashed_value* u = T->A[h];
-
-    while(u) {
-        if( memcmp( &u->pos, &pos, sizeof(struct read_pos) ) == 0 ) {
-            u->count++;
-            return;
-        }
-
-        u = u->next;
-    }
-
-    u = malloc(sizeof(struct hashed_value));
-    memcpy( &u->pos, &pos, sizeof(struct read_pos) );
-
-    u->count = 1;
-
-    u->next = T->A[h];
-    T->A[h] = u;
-
-    T->m++;
+    if( tid < 0 || tid >= T->n ) return;
+    if( subtable_inc( &T->ts[strand][tid], pos ) ) T->m++;
 }
 
 
-
-/* Insert existing entries without copying sequences. Used for rehashing. */
-bool table_insert_without_copy( struct table* T, struct hashed_value* V )
+uint32_t table_count( struct table* T, bam1_t* read )
 {
-    if( T->m == T->max_m ) rehash( T, T->n*2 );
+    int32_t pos;
+    if( bam1_strand(read) ) pos = bam_calend( &read->core, bam1_cigar(read) ) - 1;
+    else                    pos = read->core.pos;
 
-    uint32_t h = hash((void*)&V->pos,sizeof(struct read_pos)) % T->n;
-
-    V->next = T->A[h];
-    T->A[h] = V;
-
-    T->m++;
-
-    return true;
+    return table_count_pos( T, read->core.tid, pos, bam1_strand(read) );
 }
 
 
-/* Rezise the table T to new_n. */
-void rehash( struct table* T, size_t new_n )
+uint32_t table_count_pos( struct table* T, int32_t tid, int32_t pos, uint32_t strand )
 {
-    struct table U;
-    U.n = new_n;
-    U.m = 0;
-    U.A = malloc( sizeof(struct hashed_value*) * U.n );
-    memset( U.A, 0, sizeof(struct hashed_value*) * U.n );
-
-
-    struct hashed_value *j,*k;
-    size_t i;
-    for( i = 0; i < T->n; i++ ) {
-        j = T->A[i];
-        while( j ) {
-            k = j->next;
-            table_insert_without_copy( &U, j );
-            j = k;
-        }
-        T->A[i] = NULL;
-    }
-
-    free(T->A);
-    T->A = U.A;
-    T->n = U.n;
-    T->max_m = T->n*MAX_LOAD;
-    T->min_m = T->n*MIN_LOAD;
+    if( tid < 0 || tid >= T->n ) return 0;
+    return subtable_count( &T->ts[strand][tid], pos );
 }
 
 
-int compare_seq_hash( const void* x, const void* y )
+void table_dump( struct table* T, struct read_pos** A_, size_t* N_ )
 {
-    struct hashed_value* const * a = x;
-    struct hashed_value* const * b = y;
-
-    int c = (*a)->pos.tid - (*b)->pos.tid;
-    if( c == 0 ) {
-        uint32_t ha = hash( (void*)&(*a)->pos, sizeof(struct read_pos) );
-        uint32_t hb = hash( (void*)&(*b)->pos, sizeof(struct read_pos) );
-        return (int32_t)a - (int32_t)b;
-    }
-    else return c;
-
-}
-
-int compare_seq_count( const void* x, const void* y )
-{
-    struct hashed_value* const * a = x;
-    struct hashed_value* const * b = y;
-
-    int c = (*a)->pos.tid - (*b)->pos.tid;
-    if( c == 0 ) {
-        if( (*a)->count == (*b)->count ) return 0;
-        else return (*a)->count > (*b)->count ? 1 : -1;
-    }
-    else return c;
-}
+    struct read_pos* A;
+    size_t N = 0;
+    size_t i, j;
 
 
-int compare_count( const void* x, const void* y )
-{
-    struct hashed_value* const * a = x;
-    struct hashed_value* const * b = y;
-
-    return (*a)->count - (*b)->count;
-}
-
-
-int compare_hashed_pos( const void* x, const void* y )
-{
-    struct hashed_value* const * a = x;
-    struct hashed_value* const * b = y;
-
-    int c = (*a)->pos.tid - (*b)->pos.tid;
-    if( c == 0 ) {
-        if( (*a)->pos.pos == (*b)->pos.pos ) return 0;
-        else return (*a)->pos.pos > (*b)->pos.pos ? 1 : -1;
-    }
-    else return c;
-}
-
-
-void sort_table( struct table* T,
-                 struct hashed_value*** S_,
-                 int(*compar)(const void *, const void *) )
-{
-    struct hashed_value** S = malloc( sizeof(struct hashed_value*) * T->m );
-    memset( S, 0, sizeof(struct hashed_value*) * T->m );
-
-    struct hashed_value* j;
-    size_t i,k;
-    for( i=0, k=0; i < T->n; i++ ) {
-        j = T->A[i];
-        while( j ) {
-            S[k] = j;
-            k++;
-            j = j->next;
+    for( i = 0; i <= 1; i++ ) {
+        for( j = 0; j < T->n; j++ ) {
+            N += T->ts[i][j].m;
         }
     }
 
-    qsort( S, T->m, sizeof(struct hashed_value*), compar );
-
-    *S_ = S;
-}
-
-void table_sort_by_seq_rand( struct table* T,
-                             struct hashed_value*** S_ )
-{
-    sort_table( T, S_, compare_seq_hash );
-}
-
-void table_sort_by_seq_count( struct table* T,
-                              struct hashed_value*** S_ )
-{
-    sort_table( T, S_, compare_seq_count );
-}
+    A = malloc( N * sizeof(struct read_pos) );
 
 
-void table_sort_by_count( struct table* T,
-                    struct hashed_value*** S_ )
-{
-    sort_table( T, S_, compare_count );
-}
-
-void table_sort_by_position( struct table* T,
-                    struct hashed_value*** S_ )
-{
-    sort_table( T, S_, compare_hashed_pos );
-}
-
-
-bool table_member( struct table* T, struct read_pos* pos )
-{
-    uint32_t h = hash((void*)pos, sizeof(struct read_pos)) % T->n;
-
-    struct hashed_value* u = T->A[h];
-
-    while(u) {
-        if( memcmp( &u->pos, pos, sizeof(struct read_pos) ) == 0 ) {
-            return true;
+    size_t u = 0;
+    size_t v;
+    for( i = 0; i <= 1; i++ ) {
+        for( j = 0; j < T->n; j++ ) {
+            for( v = 0; v < primes[T->ts[i][j].n]; v++ ) {
+                if( T->ts[i][j].A[v].pos != -1 ) {
+                    A[u].tid = j;
+                    A[u].strand = i;
+                    A[u].pos    = T->ts[i][j].A[v].pos;
+                    A[u].count  = T->ts[i][j].A[v].count;
+                    u++;
+                }
+            }
         }
-
-        u = u->next;
     }
 
-    return false;
+    *A_ = A;
+    *N_ = N;
 }
 
 
 
-void rehash_tail( struct table* T, int32_t q1, int32_t q2 )
-{
-    struct table U;
-    U.n = T->n;
-    U.m = 0;
-    U.A = malloc( sizeof(struct hashed_value*) * U.n );
-    memset( U.A, 0, sizeof(struct hashed_value*) * U.n );
 
-    struct hashed_value** S;
-    table_sort_by_count( T, &S );
 
-    int32_t i;
-    for( i = q1; i < q2; i++ ) {
-        table_insert_without_copy( &U, S[i] );
-    }
-
-    /* free the rest */
-    for( ; i < T->m; i++ ) free(S[i]);
-
-    free(S);
-    free(T->A);
-    T->A = U.A;
-    T->m = U.m;
-}
 

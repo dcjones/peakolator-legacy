@@ -4,6 +4,7 @@
 
 #include "sequencing_bias.hpp"
 #include "intervals.hpp"
+#include "table.h"
 
 #include "samtools/faidx.h"
 
@@ -15,6 +16,9 @@ class dataset
         dataset* copy() const;
 
         void fit_null_distr( interval_stack* is, double* r, double* p );
+        void hash_reads( table* T, interval_stack* is );
+
+        size_t n_targets() const { return reads_f->header->n_targets; }
 
         ~dataset();
 

@@ -26,6 +26,19 @@ void rev( T* xs, int n ) {
 }
 
 
+/* fisher-yates shuffle */
+template <typename T>
+void shuffle_array( T* A, size_t n )
+{
+    size_t i, j;
+    for( i = n-1; i > 0; i-- ) {
+        /* naive uniform, since rigor is not demanded */
+        j = rand() % (i+1);
+        std::swap( A[i], A[j] );
+    }
+}
+
+
 /* defined in bam_aux.c */
 extern "C" {
 void bam_init_header_hash(bam_header_t *header);

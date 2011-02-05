@@ -234,3 +234,42 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     log_unindent();
 }
 
+
+
+void dataset::hash_reads( table* T, interval_stack* is )
+{
+    log_puts( LOG_MSG, "hashing reads ... \n" );
+    log_indent();
+    bam_iter_t read_iter;
+    bam1_t* read = bam_init1();
+    int tid;
+
+    interval_stack::iterator i;
+    for( i = is->begin(); i != is->end(); i++ ) {
+        log_printf( LOG_MSG, "%s\n", i->seqname );
+        tid = bam_get_tid( reads_f->header, i->seqname );
+        if( tid < 0 ) continue;
+
+        read_iter = bam_iter_query( reads_index, tid,
+                                    i->start, i->end );
+
+        while( bam_iter_read( reads_f->x.bam, read_iter, read ) >= 0 ) {
+            if( bam1_strand(read) == i->strand ) {
+                table_inc( T, read );
+            }
+        }
+
+        bam_iter_destroy(read_iter);
+    }
+
+    bam_destroy1(read);
+
+    log_unindent();
+    log_puts( LOG_MSG, "done.\n" );
+}
+
+
+
+
+
+

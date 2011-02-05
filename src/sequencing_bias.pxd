@@ -4,15 +4,16 @@ cdef extern from "table.h":
     ctypedef struct hashed_value:
         pass
 
+    ctypedef struct subtable:
+        pass
+
     ctypedef struct table:
-        hashed_value** A
-        size_t n
+        subtable** A
         size_t m
-        size_t max_m
-        size_t min_m
+        size_t n
         char** seq_names
 
-    void table_create( table* )
+    void table_create( table*, size_t )
     void table_destroy( table* )
 
     void table_inc_pos( table*, int tid, int pos, unsigned int strand )

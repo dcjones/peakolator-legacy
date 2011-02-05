@@ -83,6 +83,9 @@ cdef extern from "dataset.hpp":
     ctypedef struct c_dataset "dataset":
         c_dataset* copy()
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
+        void hash_reads( table* T, c_interval_stack* I )
+        size_t n_targets()
+
         c_sequencing_bias* bias
 
 

@@ -1,16 +1,18 @@
+
 /*
- *           hash
- *           A cute little hash table implementation, to hash read positions
- *           very quickly.
+ * A quick little hash table designed to be very good at one thing: hashing the
+ * positions of every read in a BAM file.
  *
  *           Daniel Jones <dcjones@cs.washington.edu>
- *           July 2010
+ *           Feb 2011
  *
  */
 
+
+
+
 #ifndef PEAKOLATOR_TABLE
 #define PEAKOLATOR_TABLE
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,57 +23,58 @@ extern "C" {
 #include "samtools/sam.h"
 
 
-struct read_pos
-{
-    int32_t   tid;
-    int32_t   pos;
-    uint32_t  strand;
-};
-
+/* The table maps positions to counts. */
 struct hashed_value
 {
-    struct   read_pos pos;
+    int32_t  pos;
     uint32_t count;
-    struct   hashed_value* next;
 };
 
 
-/* Hash table structure. */
+/* Each strand of each sequence is stored in a seperate hash table, since the
+ * BAM file already assigns an integer index to sequences */
+struct subtable
+{
+    struct hashed_value* A; /* table proper */
+    size_t n;               /* table size (as an index into a prime table) */
+    size_t m;               /* hashed items */
+    size_t max_m;           /* max hashed items before rehash */
+};
+
+
 struct table
 {
-    struct hashed_value** A; /* table proper */
-    size_t n;                /* table size */
-    size_t m;                /* hashed items */
-    size_t max_m;            /* max hashed items before rehash */
-    size_t min_m;            /* min hashed items before rehash */
-    char**    seq_names;
+    /* an array indexd by strand -> sequence id */
+    struct subtable* ts[2];
+    size_t m; /* number of unique positions */
+    size_t n; /* number of sequences */
+    char** seq_names;
 };
 
 
-void table_create( struct table* T );
+
+/* initialize, where n is the number of sequences */
+void table_create( struct table* T, size_t n );
 void table_destroy( struct table* T );
 
 void table_inc( struct table*, bam1_t* read );
 void table_inc_pos( struct table*, int32_t tid, int32_t pos, uint32_t strand );
 
-bool table_member( struct table*, struct read_pos* pos );
+uint32_t table_count( struct table*, bam1_t* read );
+uint32_t table_count_pos( struct table*, int32_t tid, int32_t pos, uint32_t strand );
 
 
+/* To facilitate dumping the table into an array. */
+struct read_pos
+{
+    int32_t  tid;
+    uint32_t strand;
+    int32_t  pos;
+    uint32_t count;
+};
 
-void table_sort_by_seq_rand( struct table* T,
-                             struct hashed_value*** _S );
 
-void table_sort_by_seq_count( struct table* T,
-                                  struct hashed_value*** S );
-
-void table_sort_by_count( struct table* T,
-                    struct hashed_value*** S );
-
-void table_sort_by_position( struct table* T,
-                       struct hashed_value*** S );
-
-void rehash_tail( struct table* T, int32_t q1, int32_t q2 );
- 
+void table_dump( struct table* T, struct read_pos** A, size_t* n );
 
 
 #ifdef __cplusplus
@@ -79,3 +82,7 @@ void rehash_tail( struct table* T, int32_t q1, int32_t q2 );
 #endif
 
 #endif
+
+
+
+

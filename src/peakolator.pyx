@@ -196,6 +196,27 @@ cdef class dataset:
         return (float(r),float(p))
 
 
+    def hash_reads( self, train ):
+        # this interface is provided only so that
+        # the hash function may be profiled.
+
+        # convert to an interval_stack
+        cdef c_interval_stack* IS = new_interval_stack()
+
+        for I in train:
+            interval_stack_push( IS, I.seqname, I.start, I.end, I.strand )
+
+        cdef table T
+        table_create( &T, self.cthis.n_targets() )
+
+        self.cthis.hash_reads( &T, IS )
+
+        (n,m) = (T.n,T.m)
+        table_destroy( &T )
+        del_interval_stack( IS )
+
+        return (n,m)
+
 
 
 
@@ -323,10 +344,11 @@ cdef class motif:
         cdef table T
 
         tids = {}
-        table_create( &T )
         for (seqname, pos, strand) in positions:
             if seqname not in tids: tids[seqname] = len(tids)
-            table_inc_pos( &T, tids[seqname], pos, strand )
+
+        table_create( &T, len(tids) )
+        table_inc_pos( &T, tids[seqname], pos, strand )
 
         cdef char** seq_names = <char**>malloc( len(tids) * sizeof(char*) )
         for (seqname,tid) in tids.iteritems():
