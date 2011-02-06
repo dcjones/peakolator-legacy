@@ -19,6 +19,8 @@ class dataset
                                 size_t max_reads, pos L, pos R,
                                 double complexity_penalty = 1.0 );
 
+        void load_sequence_bias( const char* ref_fn, const char* bias_fn );
+
         void fit_null_distr( interval_stack* is, double* r, double* p );
         void hash_reads( table* T, interval_stack* is );
 

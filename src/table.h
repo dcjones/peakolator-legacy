@@ -86,11 +86,18 @@ void read_counts_copy( struct read_counts* C, const struct read_counts* B );
 void read_counts_destroy( struct read_counts* C );
 
 
-unsigned int read_counts_count( const struct read_counts* C,
-                                int32_t tid, int32_t start, int32_t end, uint32_t strand );
+void read_counts_count( const struct read_counts* C,
+                        int32_t tid, int32_t start, int32_t end, uint32_t strand,
+                        unsigned int* ys );
 
 unsigned int read_counts_total( const struct read_counts* C,
                                 int32_t tid, int32_t start, int32_t end, uint32_t strand );
+
+
+void read_count_occurances( const struct read_counts* C,
+                            int32_t tid,  int32_t start, int32_t end, uint32_t strand,
+                            uint64_t* ks, size_t max_k );
+
 
 
 /* dump to a flat array (used by sequencing bias) */

@@ -85,6 +85,9 @@ cdef extern from "dataset.hpp":
 
         void fit_sequence_bias( char* ref_fn, size_t max_reads, pos L, pos R,
                                 double complexity_penalty )
+
+        void load_sequence_bias( char* ref_fn, char* bias_fn )
+
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
 
         void hash_reads( table* T, c_interval_stack* I )

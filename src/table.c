@@ -301,7 +301,7 @@ void read_counts_create( struct read_counts* C, const struct table* T )
             ys = T->ts[strand][tid].A;
             xs = malloc( m * sizeof(struct hashed_value) );
 
-            for( i = 0, j = 0; j < n; j++ ) {
+            for( i = 0, j = 0; j < primes[n]; j++ ) {
                 if( ys[j].pos != nilpos ) {
                     xs[i].pos   = ys[i].pos;
                     xs[i].count = ys[i].count;
@@ -329,6 +329,7 @@ void read_counts_copy( struct read_counts* C, const struct read_counts* B )
 
     for( strand = 0; strand <= 1; strand++ ) {
         C->mss[strand] = malloc( C->n * sizeof(size_t) );
+        C->xss[strand] = malloc( C->n * sizeof(struct hashed_value*) );
         for( tid = 0; tid < C->n; tid++ ) {
             C->mss[strand][tid] = B->mss[strand][tid];
             siz = C->mss[strand][tid] * sizeof(struct hashed_value);
@@ -360,19 +361,102 @@ void read_counts_destroy( struct read_counts* C )
 
 
 
-
-unsigned int read_counts_count( const struct read_counts* C,
-                               int32_t tid, int32_t start, int32_t end, uint32_t strand )
+/* find an index i, such that
+ *      xs[i-1].pos < start <= xs[i].pos
+ * using binary search.
+ */
+size_t bisect( struct hashed_value* xs, size_t m, int32_t start )
 {
-    /* TODO */
-    return 0;
+    size_t a = 0;
+    size_t b = m;
+    size_t i = 0;
+
+    while( a < b ) {
+        i = a + (b - a) / 2;
+
+        if( xs[i].pos < start )                  a = i;
+        else if( i > 0 && start <= xs[i-1].pos ) b = i;
+
+        /* xs[i-1].pos <= start <= xs[i] */
+        else break;
+    }
+
+    return i;
+}
+
+
+void read_counts_count( const struct read_counts* C,
+                        int32_t tid, int32_t start, int32_t end, uint32_t strand,
+                        unsigned int* ys )
+{
+    struct hashed_value* xs = C->xss[strand][tid];
+    size_t               m  = C->mss[strand][tid];
+
+    if( m == 0 ) return;
+
+    size_t i = bisect( xs, m, start );
+
+    memset( ys, 0, m*sizeof(unsigned int) );
+    while( i < m && xs[i].pos <= end ) {
+        ys[ xs[i].pos - start ] = xs[i].count;
+        i++;
+    }
 }
 
 unsigned int read_counts_total( const struct read_counts* C,
-                               int32_t tid, int32_t start, int32_t end, uint32_t strand )
+                                int32_t tid, int32_t start, int32_t end, uint32_t strand )
 {
-    /* TODO */
-    return 0;
+    struct hashed_value* xs = C->xss[strand][tid];
+    size_t               m  = C->mss[strand][tid];
+
+    if( m == 0 ) return;
+
+    size_t i = bisect( xs, m, start );
+
+    unsigned int total = 0;
+    while( i < m && xs[i].pos <= end ) {
+        total += xs[i].count;
+        i++;
+    }
+
+    return total;
+}
+
+
+void read_count_occurances( const struct read_counts* C,
+                            int32_t tid,  int32_t start, int32_t end, uint32_t strand,
+                            uint64_t* ks, size_t max_k )
+{
+    struct hashed_value* xs = C->xss[strand][tid];
+    size_t               m  = C->mss[strand][tid];
+
+    if( m == 0 ) return;
+
+    size_t i;
+
+    i = bisect( xs, m, start );
+    uint64_t nonzeros = 0;
+
+    while( i < m && xs[i].pos <= end ) {
+        if( xs[i].count <= max_k ) ks[xs[i].count]++;
+        nonzeros++;
+        i++;
+    }
+
+    uint64_t zeros = (end - start + 1) - nonzeros;
+
+    /* Ignore and leading or trailing zeros if we are at the start or end of the
+     * sequence. Many genome assemblies have several kilobases of N's at the
+     * beginning and end. Considering these will lead to deflated statistics. */
+    if( start == 0 ) {
+        zeros -= xs[0].pos - start;
+    }
+
+    if( end >= m ) {
+        zeros -= end - xs[m-1].pos;
+    }
+
+    ks[0] += zeros;
 }
 
 

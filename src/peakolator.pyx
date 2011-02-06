@@ -179,8 +179,13 @@ cdef class dataset:
         ds.cthis = self.cthis.copy()
         return ds
 
+
     def fit_sequence_bias( self, ref_fn, max_reads, L, R, complexity_penalty = 1.0 ):
         self.cthis.fit_sequence_bias( ref_fn, max_reads, L, R, complexity_penalty )
+
+
+    def load_sequence_bias( self, ref_fn, bias_fn ):
+        self.cthis.load_sequence_bias( ref_fn, bias_fn )
 
 
     def fit_null_distr( self, train ):

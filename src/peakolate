@@ -76,30 +76,6 @@ class dummy_queue:
         pass
 
 
-# A class to choose items from a list with non-uniform probability.
-class weighted_choice:
-    def __init__( self, xs, ws ):
-        assert len(xs) == len(ws)
-
-        self.ws = [0] * len(xs)
-        total = float(sum(ws))
-        accum = 0
-        for (i,w) in enumerate(ws):
-            accum += w/total if total != 0.0 else 0.0
-            self.ws[i] = accum
-
-        self.xs = xs
-
-    def choose( self ):
-        i = bisect.bisect_left( self.ws, random.uniform(0,1) )
-        if i >= len(self.xs):
-            return self.xs[-1]
-        else:
-            return self.xs[i]
-
-
-
-
 
 #
 #                           Annotation Juggling
@@ -497,61 +473,6 @@ def get_interval_gaps( intervals, chrom_sizes, stranded ):
     return gaps
 
 
-def random_training_examples( orig_regions, d, n = 10000, stranded=True ):
-    '''
-    Given a big set of regions, choose some random exmaple regions on which
-    to train the null model.
-    '''
-
-
-    # Avoid sampling regions very near to known genes. These regions are always
-    # enriched with reads. So constrict the defined intergenic regions.
-    m = 2000
-
-    regions = defaultdict(list)
-
-    for seqname in orig_regions:
-        for (start,end,strand) in orig_regions[seqname]:
-
-            if not stranded: strand = -1
-
-            if end-start+1 > 2*m+d:
-                regions[seqname].append( (start+m,end-m,strand) )
-
-
-
-    # the idea here is to do true uniform sampling by choosing a chromosome in
-    # proportion to it's length, then choose a region proportionally to it's
-    # length
-
-    seqs = regions.keys()
-    seq_weights = []
-    for seqname in seqs:
-        seq_weights.append( sum( end-start+1 for (start,end,strand) in regions[seqname]) )
-
-    seq_chooser = weighted_choice( seqs, seq_weights )
-
-    region_choosers = {}
-    for seqname in seqs:
-        ws = [ (end-start+1 if end-start+1 >= d else 0) \
-             for (start,end,strand) in regions[seqname] ]
-        region_choosers[seqname] = weighted_choice( regions[seqname], ws )
-
-    train = []
-    while len(train) < n:
-        seqname = seq_chooser.choose()
-        (start,end,strand) = region_choosers[seqname].choose()
-
-        if end-start+1 < d: continue # shouldn't happen, but just in case
-
-        i = int(random.uniform( 0, end-(d-1) ))
-
-        train.append( peakolator.interval( seqname, i, i+(d-1), strand ) )
-
-
-    return train
-
-
 
 
 
@@ -685,15 +606,14 @@ def scan( args, data, chrom_sizes, regions ):
     params.d_min = 50      # minimum duration
     params.d_max = 100000  # maximum duration
 
-    d_train = 100 # duration of training examples
-    n_train = 50000 # number of training examples
-
-
     # train background model
-    training_examples = random_training_examples( regions, d_train, n_train,
-                                                  stranded = args.stranded )
+    training_intervals = []
+    for seqname in regions:
+        for (start,end,strand) in regions[seqname]:
+            training_intervals.append(
+                    peakolator.interval( seqname, start, end, strand ) )
 
-    params.r, params.p = data.fit_null_distr( training_examples )
+    params.r, params.p = data.fit_null_distr( training_intervals )
 
 
 
@@ -828,17 +748,16 @@ def main():
     chrom_sizes = peakolator.get_chrom_sizes_from_bam( args.reads_fn )
 
 
-    # sequencing bias
-    bias = None
-    if args.ref_fn is not None and args.bias_fn is not None:
-        msg.write( 'bias correction enabled\n' )
-        bias = peakolator.sequencing_bias()
-        bias.load( args.ref_fn, args.reads_fn, args.bias_fn )
-
-
     # dataset
     data = peakolator.dataset()
-    data.init( args.reads_fn, bias )
+    data.init( args.reads_fn )
+
+
+    # sequencing bias
+    if args.ref_fn is not None and args.bias_fn is not None:
+        msg.write( 'bias correction enabled\n' )
+        data.load_sequence_bias( args.ref_fn, args.bias_fn )
+
 
 
     blacklist = get_transcript_extents( reduce( operator.add,
