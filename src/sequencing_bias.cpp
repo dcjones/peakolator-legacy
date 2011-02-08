@@ -51,6 +51,17 @@ int read_pos_tid_compare( const void* p1, const void* p2 )
 }
 
 
+int read_pos_tid_count_compare( const void* p1, const void* p2 )
+{
+    int c = (int)(((read_pos*)p1)->tid - ((read_pos*)p2)->tid);
+
+    if( c == 0 ) {
+        return (int)((read_pos*)p1)->count - (int)((read_pos*)p2)->count;
+    }
+    else return c;
+}
+
+
 
 sequencing_bias::sequencing_bias()
     : ref_f(NULL)
@@ -226,8 +237,6 @@ void sequencing_bias::build( const char* ref_fn,
             log_printf( LOG_MSG, "%zu reads\n", k );
         }
         table_inc( &T, read );
-
-        if( T.m >= max_reads ) break;
     }
 
     bam_destroy1(read);
@@ -264,11 +273,12 @@ void sequencing_bias::build( const char* ref_fn,
 
     read_pos* S;
     size_t N;
-    table_dump( T, &S, &N, max_reads );
+    const size_t max_dump = 1000000;
+    table_dump( T, &S, &N, max_dump );
 
     /* shuffle, then sort by position */
     shuffle_array( S, N );
-    qsort( S, N, sizeof(read_pos), read_pos_tid_compare );
+    qsort( S, N, sizeof(read_pos), read_pos_tid_count_compare );
 
     log_puts( LOG_MSG, "done.\n" );
 
@@ -302,7 +312,7 @@ void sequencing_bias::build( const char* ref_fn,
     local_seq[L+R+1] = '\0';
 
 
-    for( i = 0; i < N; i++ ) {
+    for( i = 0; i < N && i < max_reads; i++ ) {
 
         /* Load/switch sequences (chromosomes) as they are encountered in the
          * read stream. The idea here is to avoid thrashing by loading a large

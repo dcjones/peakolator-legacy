@@ -200,8 +200,8 @@ void kmer_matrix::restore_stored_row()
 const size_t sequence::kmer_max_k = 4*sizeof(kmer);
 
 
-sequence::sequence( const char* s, int c )
-    : c(c), xs(NULL), n(0)
+sequence::sequence( const char* s, int c, double w )
+    : c(c), w(w), xs(NULL), n(0)
 {
     n = strlen(s);
     if( n > 0 ) {
@@ -221,6 +221,7 @@ sequence::sequence( const sequence& s )
     : xs(NULL), n(0)
 {
     c = s.c;
+    w = s.w;
     n = s.n;
     if( n > 0 ) {
         xs = new kmer[ n/kmer_max_k + 1 ];
@@ -508,7 +509,7 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
     std::deque<sequence*>::const_iterator seq;
     for( seq = data->begin(); seq != data->end(); seq++ ) {
         if( (*seq)->c == c && (*seq)->get( parents + j*n, n, K ) ) {
-            (*P)( j, K )++;
+            (*P)( j, K ) += (*seq)->w;
         }
     }
 

@@ -75,7 +75,7 @@ class kmer_matrix
 class sequence
 {
     public:
-        sequence( const char* s, int c = 0 );
+        sequence( const char* s, int c = 0, double w = 1.0 );
         sequence( const sequence& );
         void operator=( const sequence& );
         ~sequence();
@@ -84,6 +84,7 @@ class sequence
         bool get( const bool* indexes, size_t maxn, kmer& K, size_t offset = 0 ) const;
 
         int c; /* class (i.e. foreground (0) or foreground (1)) */
+        double w;
 
     private:
         kmer* xs;
