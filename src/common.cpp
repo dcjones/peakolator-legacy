@@ -204,6 +204,7 @@ void hash_reads( table* T, const char* reads_fn, interval_stack* is )
     bam_init_header_hash( reads_f->header );
 
     table_create( T, reads_f->header->n_targets );
+    T->seq_names = reads_f->header->target_name;
 
     log_puts( LOG_MSG, "hashing reads ... \n" );
     log_indent();
