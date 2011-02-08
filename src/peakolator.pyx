@@ -139,12 +139,15 @@ cdef class dataset:
     def __dealloc__( self ):
         del_dataset( self.cthis )
 
-    def init( self, reads_fn ):
+    def init( self, reads_fn, sequencing_bias bias = None ):
 
         if self.cthis:
             del_dataset( self.cthis )
 
         self.cthis = new_dataset( reads_fn )
+
+        if bias is not None:
+            self.cthis.bias = bias.cthis
 
 
     def get_bias( self, chrom, start, end, strand ):

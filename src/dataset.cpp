@@ -20,7 +20,7 @@ using namespace std;
 template <typename T> T sq( T x ) { return x*x; }
 
 dataset::dataset( const char* reads_fn )
-    : bias(NULL)
+    : bias(NULL), bias_owner(false)
 {
     log_printf( LOG_MSG, "loading reads from %s ...\n", reads_fn );
     log_indent();
@@ -79,6 +79,7 @@ void dataset::fit_sequence_bias( const char* ref_fn,
     if( bias != NULL ) delete bias;
     bias = new sequencing_bias( ref_fn, &T, max_reads, L, R,
                                 complexity_penalty, offset_std );
+    bias_owner = true;
 }
 
 
@@ -86,6 +87,7 @@ void dataset::load_sequence_bias( const char* ref_fn, const char* bias_fn )
 {
     if( bias != NULL ) delete bias;
     bias = new sequencing_bias( ref_fn, bias_fn );
+    bias_owner = true;
 }
 
 
@@ -121,6 +123,7 @@ dataset* dataset::copy() const
 
 dataset::~dataset()
 {
+    if( bias && bias_owner) delete bias;
     table_destroy( &T );
     read_counts_destroy( &counts );
     bam_index_destroy(reads_index);

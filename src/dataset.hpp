@@ -33,6 +33,8 @@ class dataset
     private:
         dataset();
 
+        bool bias_owner;
+
         /* reads file */
         samfile_t*   reads_f;
         bam_index_t* reads_index;
