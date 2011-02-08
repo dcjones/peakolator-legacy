@@ -218,7 +218,6 @@ void hash_reads( table* T, const char* reads_fn, interval_stack* is )
 
     interval_stack::iterator i;
     for( i = is->begin(); i != is->end(); i++ ) {
-        log_printf( LOG_MSG, "%s\n", i->seqname );
         tid = bam_get_tid( reads_f->header, i->seqname );
         if( tid < 0 ) continue;
 
@@ -237,7 +236,7 @@ void hash_reads( table* T, const char* reads_fn, interval_stack* is )
     bam_destroy1(read);
 
     log_unindent();
-    log_puts( LOG_MSG, "done.\n" );
+    log_printf( LOG_MSG, "done. (%zu unique reads hashed)\n", T->m );
 
 
     bam_index_destroy(reads_index);

@@ -342,7 +342,7 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i].pos-L), (L+1+R)*sizeof(char) );
         }
 
-        log_printf( LOG_MSG, "seq (%d): %s\n", S[i].strand, local_seq );
+        //log_printf( LOG_MSG, "seq (%d): %s\n", S[i].strand, local_seq );
 
 
         training_seqs.push_back( new sequence( local_seq, 1 ) );
