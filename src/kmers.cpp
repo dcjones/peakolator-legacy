@@ -614,7 +614,7 @@ void motif::update_likelihood_column( double* L, size_t n, size_t m, size_t j,
 
     for( i = 0; i < n; i++ )  {
         if( (*training_seqs)[i]->get( parents + j * m, m, K ) ) {
-            L[ i * m + j ] = (*P)( j, K );
+            L[ i * m + j ] = (*training_seqs)[i]->w * (*P)( j, K );
         }
     }
 }

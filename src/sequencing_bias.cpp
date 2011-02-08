@@ -56,7 +56,7 @@ int read_pos_tid_count_compare( const void* p1, const void* p2 )
     int c = (int)(((read_pos*)p1)->tid - ((read_pos*)p2)->tid);
 
     if( c == 0 ) {
-        return (int)((read_pos*)p1)->count - (int)((read_pos*)p2)->count;
+        return (int)((read_pos*)p2)->count - (int)((read_pos*)p1)->count;
     }
     else return c;
 }
@@ -278,7 +278,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     /* shuffle, then sort by position */
     shuffle_array( S, N );
-    qsort( S, N, sizeof(read_pos), read_pos_tid_compare );
+    qsort( S, N, sizeof(read_pos), read_pos_tid_count_compare );
 
     log_puts( LOG_MSG, "done.\n" );
 
