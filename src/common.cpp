@@ -1,6 +1,10 @@
 
 #include "common.hpp"
 #include "logger.h"
+#include "table.h"
+#include "intervals.hpp"
+#include "samtools/sam.h"
+#include "samtools/bam.h"
 #include "samtools/faidx_t.h"
 
 #include <cctype>
@@ -182,6 +186,57 @@ char* faidx_fetch_seq_forced_lower( const faidx_t* fai, const char *c_name, int 
     while( p_beg_i+l <= p_end_i ) seq[l++] = 'n';
 
     return seq0;
+}
+
+
+void hash_reads( table* T, const char* reads_fn, interval_stack* is )
+{
+    samfile_t* reads_f = samopen( reads_fn, "rb", NULL );
+    if( reads_f == NULL ) {
+        failf( "Can't open bam file '%s'.", reads_fn );
+    }
+
+    bam_index_t* reads_index = bam_index_load( reads_fn );
+    if( reads_index == NULL ) {
+        failf( "Can't open bam index '%s.bai'.", reads_fn );
+    }
+
+    bam_init_header_hash( reads_f->header );
+
+    table_create( T, reads_f->header->n_targets );
+
+    log_puts( LOG_MSG, "hashing reads ... \n" );
+    log_indent();
+    bam_iter_t read_iter;
+    bam1_t* read = bam_init1();
+    int tid;
+
+    interval_stack::iterator i;
+    for( i = is->begin(); i != is->end(); i++ ) {
+        log_printf( LOG_MSG, "%s\n", i->seqname );
+        tid = bam_get_tid( reads_f->header, i->seqname );
+        if( tid < 0 ) continue;
+
+        read_iter = bam_iter_query( reads_index, tid,
+                                    i->start, i->end );
+
+        while( bam_iter_read( reads_f->x.bam, read_iter, read ) >= 0 ) {
+            if( bam1_strand(read) == i->strand ) {
+                table_inc( T, read );
+            }
+        }
+
+        bam_iter_destroy(read_iter);
+    }
+
+    bam_destroy1(read);
+
+    log_unindent();
+    log_puts( LOG_MSG, "done.\n" );
+
+
+    bam_index_destroy(reads_index);
+    samclose(reads_f);
 }
 
 

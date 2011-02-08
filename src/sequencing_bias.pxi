@@ -31,13 +31,33 @@ cdef class sequencing_bias:
         return dot_str
 
 
-    def train( self, ref_fn, reads_fn, n, L, R, *etc ):
+    def train( self, ref_fn, reads_fn, n, L, R, whitelist = None,
+               complexity_penalty = 1.0, offset_std = 10.0 ):
 
-        cdef double c_complexity_penalty = 1.0
-        if len(etc) > 0:
-            c_complexity_penalty = etc[0]
+        cdef double c_complexity_penalty = complexity_penalty
+        cdef double c_offset_std         = offset_std
 
-        self.cthis = train_sequencing_bias( ref_fn, reads_fn, n, L, R,
-                                            c_complexity_penalty )
+
+        cdef c_interval_stack* IS = NULL
+        cdef table T
+
+        if whitelist is not None:
+            IS = new_interval_stack()
+            for I in whitelist:
+                interval_stack_push( IS, I.seqname, I.start, I.end, I.strand )
+
+            hash_reads( &T, reads_fn, IS )
+
+            self.cthis = train_sequencing_bias2( ref_fn, &T, n, L, R,
+                                                 c_complexity_penalty, c_offset_std )
+
+            table_destroy( &T )
+            del_interval_stack( IS )
+        else:
+            self.cthis = train_sequencing_bias( ref_fn, reads_fn, n, L, R,
+                                                c_complexity_penalty, c_offset_std )
+
+
+
 
 

@@ -44,15 +44,12 @@ def main():
                             'increase/decrease the model complexity penalty '
                             '(default: 1.0, i.e. no weighting)')
 
-    ap.add_argument( '--backward', default=False, action='store_true',
-                     help = 'train using backward stepwise regression\n'
-                            '(by default, forward regression is done)' )
 
     args = ap.parse_args()
 
     seqbias = sequencing_bias()
     seqbias.train( args.ref_fn, args.reads_fn, args.n, args.L, args.R,
-                   args.backward, args.complexity_penalty )
+                   complexity_penalty = args.complexity_penalty )
 
     seqbias.save( args.output )
 

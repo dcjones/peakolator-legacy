@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include "samtools/faidx.h"
+#include "samtools/sam.h"
 #include "samtools/bam.h"
-
 
 typedef long         pos;     /* genomic position */
 typedef unsigned int rcount;  /* read count */
@@ -48,6 +48,13 @@ void bam_init_header_hash(bam_header_t *header);
  * coordinates are outside the actual sequence, write N's, rather than adjusting
  * the start,end. */
 char* faidx_fetch_seq_forced_lower( const faidx_t* fai, const char *c_name, int p_beg_i, int p_end_i );
+
+
+
+struct table;
+class interval_stack;
+ 
+void hash_reads( table* T, const char* reads_fn, interval_stack* is );
 
 
 #endif

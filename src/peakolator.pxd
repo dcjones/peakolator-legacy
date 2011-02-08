@@ -33,10 +33,6 @@ cdef extern from "logger.h":
     void log_verbosity( int )
 
 
-cdef extern from "common.hpp":
-    ctypedef long          pos
-    ctypedef unsigned long rcount
-
 
 
 cdef extern from "annotations.hpp":
@@ -52,32 +48,6 @@ cdef extern from "annotations.hpp":
 
 
 
-cdef extern from "intervals.hpp":
-
-    ctypedef struct c_interval "interval":
-        void set( char* seqname, pos start, pos end, int strand )
-        pos length()
-        char* seqname
-        pos start
-        pos end
-        int strand
-        double score
-
-    c_interval* new_interval "new interval" ()
-    c_interval* copy_interval "new interval" ( c_interval )
-    void del_interval "delete" ( c_interval* i )
-
-    ctypedef struct c_interval_stack "interval_stack":
-        int  empty()
-        void pop_back()
-        c_interval back()
-
-    c_interval_stack* new_interval_stack "new interval_stack" ()
-    void del_interval_stack "delete" ( c_interval_stack*  )
-
-    void interval_stack_push ( c_interval_stack*, char* seqname, pos start, pos end, int strand )
-
-
 cdef extern from "dataset.hpp":
 
     ctypedef struct c_dataset "dataset":
@@ -90,7 +60,6 @@ cdef extern from "dataset.hpp":
 
         void fit_null_distr( c_interval_stack* train, double* p, double* r )
 
-        void hash_reads( table* T, c_interval_stack* I )
         size_t n_targets()
 
         c_sequencing_bias* bias

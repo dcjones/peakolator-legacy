@@ -88,12 +88,14 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   const char* reads_fn,
                                   size_t max_reads, pos L, pos R,
-                                  double complexity_penalty )
+                                  double complexity_penalty,
+                                  double offset_std )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, reads_fn, max_reads, L, R, complexity_penalty );
+    build( ref_fn, reads_fn, max_reads, L, R,
+           complexity_penalty, offset_std );
 }
 
 
@@ -101,12 +103,13 @@ sequencing_bias::sequencing_bias( const char* ref_fn,
 sequencing_bias::sequencing_bias( const char* ref_fn,
                                   table* T, size_t max_reads,
                                   pos L, pos R,
-                                  double complexity_penalty )
+                                  double complexity_penalty,
+                                  double offset_std )
     : ref_f(NULL)
     , ref_fn(NULL)
     , M0(NULL), M1(NULL)
 {
-    build( ref_fn, T, max_reads, L, R, complexity_penalty );
+    build( ref_fn, T, max_reads, L, R, complexity_penalty, offset_std );
 }
 
 
@@ -191,7 +194,8 @@ void sequencing_bias::clear()
 void sequencing_bias::build( const char* ref_fn,
                              const char* reads_fn,
                              size_t max_reads, pos L, pos R,
-                             double complexity_penalty )
+                             double complexity_penalty,
+                             double offset_std )
 {
     log_printf( LOG_MSG, "hashing reads ... \n" );
     log_indent();
@@ -212,6 +216,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     table T;
     table_create( &T, reads_f->header->n_targets );
+    T.seq_names = reads_f->header->target_name;
 
     size_t k = 0;
 
@@ -230,7 +235,7 @@ void sequencing_bias::build( const char* ref_fn,
     log_puts( LOG_MSG, "done.\n" );
     log_unindent();
 
-    build( ref_fn, &T, max_reads, L, R, complexity_penalty );
+    build( ref_fn, &T, max_reads, L, R, complexity_penalty, offset_std );
 
     table_destroy( &T );
 
@@ -242,7 +247,8 @@ void sequencing_bias::build( const char* ref_fn,
 void sequencing_bias::build( const char* ref_fn,
                              table* T, size_t max_reads,
                              pos L, pos R,
-                             double complexity_penalty )
+                             double complexity_penalty,
+                             double offset_std )
 {
     clear();
 
@@ -346,7 +352,7 @@ void sequencing_bias::build( const char* ref_fn,
         /* adjust the current read position randomly, and sample */
         for( bg_sample_num = 0; bg_sample_num < bg_samples; bg_sample_num++ ) {
 
-            bg_pos = S[i].pos + (pos)ceil( rand_gauss( 10 ) );
+            bg_pos = S[i].pos + (pos)ceil( rand_gauss( offset_std ) );
 
             if( S[i].strand ) {
                 if( bg_pos < R ) continue;

@@ -242,6 +242,7 @@ void table_inc( struct table* T, bam1_t* read )
 
 
 
+
 void table_inc_pos( struct table* T, int32_t tid, int32_t pos, uint32_t strand )
 {
     if( tid < 0 || tid >= T->n ) return;

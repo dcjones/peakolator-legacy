@@ -17,12 +17,12 @@ class dataset
 
         void fit_sequence_bias( const char* ref_fn,
                                 size_t max_reads, pos L, pos R,
-                                double complexity_penalty = 1.0 );
+                                double complexity_penalty = 1.0,
+                                double offset_std = 10.0 );
 
         void load_sequence_bias( const char* ref_fn, const char* bias_fn );
 
         void fit_null_distr( interval_stack* is, double* r, double* p );
-        void hash_reads( table* T, interval_stack* is );
 
         size_t n_targets() const { return reads_f->header->n_targets; }
 

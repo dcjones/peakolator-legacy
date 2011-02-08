@@ -205,27 +205,6 @@ cdef class dataset:
         return (float(r),float(p))
 
 
-    def hash_reads( self, train ):
-        # this interface is provided only so that
-        # the hash function may be profiled.
-
-        # convert to an interval_stack
-        cdef c_interval_stack* IS = new_interval_stack()
-
-        for I in train:
-            interval_stack_push( IS, I.seqname, I.start, I.end, I.strand )
-
-        cdef table T
-        table_create( &T, self.cthis.n_targets() )
-
-        self.cthis.hash_reads( &T, IS )
-
-        (n,m) = (T.n,T.m)
-        table_destroy( &T )
-        del_interval_stack( IS )
-
-        return (n,m)
-
 
 
 
@@ -364,7 +343,7 @@ cdef class motif:
             seq_names[tid] = strdup(seqname)
         T.seq_names = seq_names
 
-        self.cthis = train_sequencing_bias2( ref_fn, &T, 0, L, R, 1.0 )
+        self.cthis = train_sequencing_bias2( ref_fn, &T, 0, L, R, 1.0, 10.0 )
 
         table_destroy( &T )
 

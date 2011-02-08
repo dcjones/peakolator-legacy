@@ -44,7 +44,8 @@ peakolate_seqbias_SOURCES = peakolate_seqbias.pyx \
 							miscmath.hpp        miscmath.cpp \
 							logger.h            logger.c \
 							table.h             table.c \
-							kmers.hpp           kmers.cpp
+							kmers.hpp           kmers.cpp \
+							intervals.hpp       intervals.cpp
 
 nodist_peakolate_seqbias_SOURCES = peakolate-seqbias.cpp
 
