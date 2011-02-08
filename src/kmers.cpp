@@ -565,10 +565,10 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
         L0 = M0.eval( **i );
         L1 = M1.eval( **i );
         if( (*i)->c == 0 ) {
-            L += L0 - logaddexp( L0, L1 );
+            L += (*i)->w * (L0 - logaddexp( L0, L1 ));
         }
         else if( (*i)->c == 1 ) {
-            L += L1 - logaddexp( L0, L1 );
+            L += (*i)->w * (L1 - logaddexp( L0, L1 ));
         }
     }
 

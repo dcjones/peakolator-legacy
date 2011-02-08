@@ -278,7 +278,7 @@ void sequencing_bias::build( const char* ref_fn,
 
     /* shuffle, then sort by position */
     shuffle_array( S, N );
-    qsort( S, N, sizeof(read_pos), read_pos_tid_count_compare );
+    qsort( S, N, sizeof(read_pos), read_pos_tid_compare );
 
     log_puts( LOG_MSG, "done.\n" );
 
@@ -300,6 +300,8 @@ void sequencing_bias::build( const char* ref_fn,
     size_t bg_samples = 1; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
     pos bg_pos;
+
+    double alpha; // abundance estimate
     
     int b;
     char*          seqname   = NULL;
@@ -352,10 +354,13 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i].pos-L), (L+1+R)*sizeof(char) );
         }
 
-        //log_printf( LOG_MSG, "seq (%d): %s\n", S[i].strand, local_seq );
+        bg_pos = S[i].pos + (pos)ceil( rand_gauss( offset_std ) );
+        alpha = (double)(S[i].count +
+                         table_count_pos( T, S[i].tid, bg_pos, S[i].strand )) / 2.0;
 
+        log_printf( LOG_MSG, "seq (%0.4e): %s\n", (double)S[i].count / alpha, local_seq );
 
-        training_seqs.push_back( new sequence( local_seq, 1 ) );
+        training_seqs.push_back( new sequence( local_seq, 1,  (double)S[i].count / alpha ) );
 
 
         /* add a background sequence */
