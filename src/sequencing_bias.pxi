@@ -51,6 +51,10 @@ cdef class sequencing_bias:
             self.cthis = train_sequencing_bias2( ref_fn, &T, n, L, R,
                                                  c_complexity_penalty, c_offset_std )
 
+            for k in range(T.n):
+                stdlib.free(T.seq_names[k])
+            stdlib.free(T.seq_names)
+
             table_destroy( &T )
             del_interval_stack( IS )
         else:
