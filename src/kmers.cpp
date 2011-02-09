@@ -798,6 +798,9 @@ void train_motifs( motif& M0, motif& M1,
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
+                /* TODO: DELETE ME */
+                log_printf( LOG_MSG, "\nL = %0.4e, ic = %0.4e\n", l, ic );
+
                 if( ic > ic_forw_best ) {
                     ic_forw_best = ic;
                     i_forw_best = i;
