@@ -41,6 +41,17 @@ static double rand_gauss( double sigma )
 }
 
 
+static double rand_trunc_gauss( double sigma, double a, double b )
+{
+    double x;
+    do {
+        x = rand_gauss( sigma );
+    } while( x < a || x > b );
+
+    return x;
+}
+
+
 double gauss_pdf (const double x, const double sigma)
 {
   double u = x / fabs (sigma);
@@ -56,6 +67,11 @@ const double sequencing_bias::pseudocount = 1;
 int read_pos_tid_compare( const void* p1, const void* p2 )
 {
     return ((read_pos*)p1)->tid - ((read_pos*)p2)->tid;
+}
+
+int read_pos_count_compare( const void* p1, const void* p2 )
+{
+    return (int)((read_pos*)p2)->count - (int)((read_pos*)p1)->count;
 }
 
 
@@ -286,8 +302,8 @@ void sequencing_bias::build( const char* ref_fn,
     table_dump( T, &S, &N, max_dump );
 
     /* shuffle, then sort by position */
-    shuffle_array( S, N );
-    qsort( S, N, sizeof(read_pos), read_pos_tid_count_compare );
+    qsort( S, N, sizeof(read_pos), read_pos_count_compare );
+    qsort( S, std::min<size_t>( max_reads, N ), sizeof(read_pos), read_pos_tid_compare );
 
     log_puts( LOG_MSG, "done.\n" );
 
@@ -306,7 +322,7 @@ void sequencing_bias::build( const char* ref_fn,
 
 
     /* background sampling */
-    size_t bg_samples = 1; // make this many samples for each read
+    size_t bg_samples = 2; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
     pos offset;
     pos bg_pos;
@@ -377,6 +393,7 @@ void sequencing_bias::build( const char* ref_fn,
         for( bg_sample_num = 0; bg_sample_num < bg_samples; bg_sample_num++ ) {
 
             bg_pos = S[i].pos + (pos)ceil( rand_gauss( offset_std ) );
+            bg_pos = S[i].pos + (pos)ceil( rand_trunc_gauss( offset_std, 100, 100 ) );
 
             if( S[i].strand ) {
                 if( bg_pos < R ) continue;
