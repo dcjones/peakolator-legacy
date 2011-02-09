@@ -728,12 +728,19 @@ void train_motifs( motif& M0, motif& M1,
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
 
+    /* for pretty output */
+    size_t col;
+    const char* col_base = "\n%34s";
+    const size_t col_max = 20;
+
+
     size_t round_num = 0;
 
     while( true ) {
         round_num++;
 
         log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round_num, ic_curr );
+        col = 0;
 
         ic_forw_best = ic_back_best = -HUGE_VAL;
         j_forw_best = i_forw_best = j_back_best = i_back_best = 0;
@@ -770,7 +777,18 @@ void train_motifs( motif& M0, motif& M1,
                     continue;
                 }
 
+                /* skip edges that are equivalent to one already tried */
+                if( i < j && M0.num_parents(j) == 1 && M0.num_parents(i) == 1 ) {
+                    continue;
+                }
+
+
                 log_puts( LOG_MSG, "+" );
+                if( ++col > col_max ) {
+                    col = 0;
+                    log_printf( LOG_MSG, col_base, "" );
+                }
+
 
 
                 /* keep track of the old parameters to avoid retraining */
@@ -841,6 +859,10 @@ void train_motifs( motif& M0, motif& M1,
                 if( i == j && M0.num_parents(j) > 1 ) continue;
 
                 log_puts( LOG_MSG, "-" );
+                if( ++col > col_max ) {
+                    col = 0;
+                    log_printf( LOG_MSG, col_base, "" );
+                }
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
@@ -899,11 +921,16 @@ void train_motifs( motif& M0, motif& M1,
         /* phase 3: try all possible edge reversals */
         for( j = 0; j < M0.n; j++ ) {
             for( i = 0; i < M0.n; i++ ) {
-                if( !(M0.has_edge( i, j ) && M0.has_edge( i, i ) && M0.has_edge( 1, 1 )) ) {
+                if( i == j ) continue;
+                if( !(M0.has_edge( i, j ) && M0.has_edge( i, i ) && M0.has_edge( j, j )) ) {
                     continue;
                 }
 
-                log_puts( LOG_MSG, "=" );
+                log_puts( LOG_MSG, "%" );
+                if( ++col > col_max ) {
+                    col = 0;
+                    log_printf( LOG_MSG, col_base, "" );
+                }
 
                 /* TODO */
             }
