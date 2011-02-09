@@ -32,8 +32,11 @@ class kmer_matrix
 
         void to_yaml( YAML::Emitter& out ) const;
 
-        void   setall( double x );
-        void   setrow( size_t i, double x );
+        void setall( double x );
+        void setrowall( size_t i, double x );
+
+        void getrow( size_t i, double* x );
+        void setrow( size_t i, double* x );
 
         size_t getn() const;
         size_t getm() const;
@@ -49,21 +52,12 @@ class kmer_matrix
         void dist_conditionalize_row( size_t i, size_t j, int effective_k = -1 );
         void log_transform_row( size_t i, int effective_k = -1 );
 
-        /* allows one row to be stored then reset, which is used when searching
-         * for the optimal edge to add when training the model */
-        void store_row( size_t i );
-        void restore_stored_row();
-
-
     private:
 
         size_t k; // size of k-mer
         size_t n; // number of positions
         size_t m; // 4^k
         double* A;
-
-        double* stored_row;
-        size_t stored_row_index;
 };
 
 
@@ -119,8 +113,6 @@ class motif
 
         size_t num_params() const;
 
-        void store_row( size_t i );
-        void restore_stored_row();
         char* print_model_graph( int offset = 0 );
 
         int c; /* which subset of the training data to consider */

@@ -23,8 +23,6 @@ kmer_matrix::kmer_matrix( const YAML::Node& node )
     for( i = 0; i < n*m; i++ ) {
         node_A[i] >> A[i];
     }
-
-    stored_row = new double[ m ];
 }
 
 kmer_matrix::kmer_matrix( size_t n, size_t k )
@@ -33,7 +31,6 @@ kmer_matrix::kmer_matrix( size_t n, size_t k )
     m = 1<<(2*k); /* == 4^k */
 
     A = new double[ n * m ];
-    stored_row = new double[ m ];
 }
 
 kmer_matrix::kmer_matrix( const kmer_matrix& M )
@@ -44,10 +41,6 @@ kmer_matrix::kmer_matrix( const kmer_matrix& M )
     m = M.m;
     A = new double[ n * m ];
     memcpy( (void*)A, (void*)M.A, n * m * sizeof(double) );
-
-
-    stored_row = new double[ m ];
-    memcpy( (void*)stored_row, (void*)M.stored_row, m * sizeof(double) );
 }
 
 size_t kmer_matrix::getn() const { return n; }
@@ -64,13 +57,9 @@ void kmer_matrix::operator=( const kmer_matrix& M )
 
         delete[] A;
         A = new double[ n * m ];
-
-        delete[] stored_row;
-        stored_row = new double[ m ];
     }
 
     memcpy( (void*)A, (void*)M.A, n * m * sizeof(double) );
-    memcpy( (void*)stored_row, (void*)M.stored_row, m * sizeof(double) );
 }
 
 
@@ -101,7 +90,6 @@ void kmer_matrix::to_yaml( YAML::Emitter& out ) const
 kmer_matrix::~kmer_matrix()
 {
     delete[] A;
-    delete[] stored_row;
 }
 
 
@@ -117,12 +105,22 @@ void kmer_matrix::setall( double x )
     for( i = 0; i < n * m; i++ ) A[i] = x;
 }
 
-void kmer_matrix::setrow( size_t i, double x )
+void kmer_matrix::setrowall( size_t i, double x )
 {
     size_t j;
     for( j = 0; j < m; j++ ) {
         A[ i * m + j ] = x;
     }
+}
+
+void kmer_matrix::getrow( size_t i, double* xs )
+{
+    memcpy( (void*)xs, (void*)(A + i * m), m * sizeof(double) );
+}
+
+void kmer_matrix::setrow( size_t i, double* xs )
+{
+    memcpy( (void*)(A + i * m ), (void*)xs, m * sizeof(double) );
 }
 
 
@@ -190,19 +188,6 @@ void kmer_matrix::log_transform_row( size_t i, int effective_k )
     for( j = 0; j < j_max; j++ ) {
         A[ i * m + j ] = log( A[ i * m + j ] );
     }
-}
-
-
-void kmer_matrix::store_row( size_t i )
-{
-    memcpy( (void*)stored_row, (void*)(A + i * m), m * sizeof(double) );
-    stored_row_index = i;
-}
-
-
-void kmer_matrix::restore_stored_row()
-{
-    memcpy( (void*)(A + stored_row_index * m), (void*)stored_row, m * sizeof(double) );
 }
 
 
@@ -443,17 +428,6 @@ void motif::compute_reachability()
 }
 
 
-void motif::store_row( size_t i )
-{
-    P->store_row( i );
-}
-
-
-void motif::restore_stored_row()
-{
-    P->restore_stored_row();
-}
-
 
 char* motif::print_model_graph( int offset )
 {
@@ -477,10 +451,10 @@ char* motif::print_model_graph( int offset )
 
 
     for( j = 0; j < (int)n; j++ ) {
-        if( i == j ) continue;
         if( !parents[j*n+j] ) continue;
 
         for( i = 0; i < n; i++ ) {
+            if( i == j ) continue;
             if( parents[j*n+i] ) {
                 r = asprintf( &tmp, "n%d -> n%d;\n", i, j );
                 graph_str += tmp;
@@ -502,7 +476,7 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
     set_edge( i, j, true );
 
-    P->setrow( j, 0.0 );
+    P->setrowall( j, 0.0 );
     size_t n_parents = num_parents(j);
     size_t m = 1 << (2*n_parents);
     kmer K;
@@ -537,7 +511,7 @@ void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
     set_edge( i, j, false );
 
-    P->setrow( j, 0.0 );
+    P->setrowall( j, 0.0 );
     size_t n_parents = num_parents(j);
     size_t m = 1 << (2*n_parents);
     kmer K;
@@ -682,6 +656,14 @@ void train_motifs( motif& M0, motif& M1,
     double* l1 = new double[ n ]; memset( (void*)l1, 0, n * sizeof(double) );
 
 
+    /* vectors for saving and restoring parameters, to avoid recomputing
+     * frequencies */
+    double* M0_row_j = new double[ M0.P->getm() ];
+    double* M1_row_j = new double[ M0.P->getm() ];
+    double* M0_row_i = new double[ M0.P->getm() ];
+    double* M1_row_i = new double[ M0.P->getm() ];
+
+
     /* 0-1 vector giving labeling each sequence as foreground or background */
     int* cs = new int[ n ];
 
@@ -698,8 +680,10 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
-    double* b0 = new double[ n ];
-    double* b1 = new double[ n ];
+    double* b0_j = new double[ n ];
+    double* b1_j = new double[ n ];
+    double* b0_i = new double[ n ];
+    double* b1_i = new double[ n ];
     
 
     /* keeping track of the optimal edge */
@@ -712,6 +696,9 @@ void train_motifs( motif& M0, motif& M1,
 
     double ic_back_best;
     size_t j_back_best, i_back_best;
+
+    double ic_rev_best;
+    size_t j_rev_best, i_rev_best;
 
 
     /* parameters to compute information criterion */
@@ -742,8 +729,9 @@ void train_motifs( motif& M0, motif& M1,
         log_printf( LOG_MSG, "round %4d (ic = %0.4e) ", round_num, ic_curr );
         col = 0;
 
-        ic_forw_best = ic_back_best = -HUGE_VAL;
-        j_forw_best = i_forw_best = j_back_best = i_back_best = 0;
+        ic_forw_best = ic_back_best = ic_rev_best = -HUGE_VAL;
+        i_forw_best = i_back_best = i_rev_best = 0;
+        j_forw_best = j_back_best = j_rev_best = 0;
 
 
         /* phase 1: try all possible edge additions */
@@ -790,15 +778,13 @@ void train_motifs( motif& M0, motif& M1,
                 }
 
 
-
                 /* keep track of the old parameters to avoid retraining */
-                M0.store_row(j);
-                M1.store_row(j);
-
+                M0.P->getrow( j, M0_row_j );
+                M1.P->getrow( j, M1_row_j );
 
                 /* keep track of the old likelihoods to avoid reevaluating */
-                colcpy( b0, L0, j, n, m  );
-                colcpy( b1, L1, j, n, m );
+                colcpy( b0_j, L0, j, n, m  );
+                colcpy( b1_j, L1, j, n, m );
 
                 /* add edge */
                 M0.add_edge( i, j, training_seqs );
@@ -810,10 +796,10 @@ void train_motifs( motif& M0, motif& M1,
 
 
                 /* update training example likelihoods */
-                vecsub( l0, b0, n );
+                vecsub( l0, b0_j, n );
                 vecaddcol( l0, L0, n, m, j );
 
-                vecsub( l1, b1, n );
+                vecsub( l1, b1_j, n );
                 vecaddcol( l1, L1, n, m, j );
 
 
@@ -836,18 +822,18 @@ void train_motifs( motif& M0, motif& M1,
                 M1.set_edge( i, j, false );
 
                 /* restore previous parameters */
-                M0.restore_stored_row();
-                M1.restore_stored_row();
+                M0.P->setrow( j, M0_row_j );
+                M1.P->setrow( j, M1_row_j );
 
                 /* restore previous likelihoods */
                 vecsubcol( l0, L0, n, m, j );
-                vecadd( l0, b0, n );
+                vecadd( l0, b0_j, n );
 
                 vecsubcol( l1, L1, n, m, j );
-                vecadd( l1, b1, n );
+                vecadd( l1, b1_j, n );
 
-                matsetcol( L0, b0, n, m, j );
-                matsetcol( L1, b1, n, m, j );
+                matsetcol( L0, b0_j, n, m, j );
+                matsetcol( L1, b1_j, n, m, j );
             }
         }
 
@@ -865,12 +851,12 @@ void train_motifs( motif& M0, motif& M1,
                 }
 
                 /* keep track of the old parameters to avoid retraining */
-                M0.store_row(j);
-                M1.store_row(j);
+                M0.P->getrow( j, M0_row_j );
+                M1.P->getrow( j, M1_row_j );
 
                 /* keep track of the old likelihoods to avoid reevaluating */
-                colcpy( b0, L0, j, n, m  );
-                colcpy( b1, L1, j, n, m );
+                colcpy( b0_j, L0, j, n, m  );
+                colcpy( b1_j, L1, j, n, m );
 
                 /* remove edge */
                 M0.remove_edge( i, j, training_seqs );
@@ -881,10 +867,10 @@ void train_motifs( motif& M0, motif& M1,
                 M1.update_likelihood_column( L1, n, m, j, training_seqs );
 
                 /* update training example likelihoods */
-                vecsub( l0, b0, n );
+                vecsub( l0, b0_j, n );
                 vecaddcol( l0, L0, n, m, j );
 
-                vecsub( l1, b1, n );
+                vecsub( l1, b1_j, n );
                 vecaddcol( l1, L1, n, m, j );
 
                 /* evaluate likelihood / ic */
@@ -903,18 +889,18 @@ void train_motifs( motif& M0, motif& M1,
                 M1.set_edge( i, j, true );
 
                 /* restore previous parameters */
-                M0.restore_stored_row();
-                M1.restore_stored_row();
+                M0.P->setrow( j, M0_row_j );
+                M1.P->setrow( j, M1_row_j );
 
                 /* restore previous likelihoods */
                 vecsubcol( l0, L0, n, m, j );
-                vecadd( l0, b0, n );
+                vecadd( l0, b0_j, n );
 
                 vecsubcol( l1, L1, n, m, j );
-                vecadd( l1, b1, n );
+                vecadd( l1, b1_j, n );
 
-                matsetcol( L0, b0, n, m, j );
-                matsetcol( L1, b1, n, m, j );
+                matsetcol( L0, b0_j, n, m, j );
+                matsetcol( L1, b1_j, n, m, j );
             }
         }
 
@@ -932,7 +918,80 @@ void train_motifs( motif& M0, motif& M1,
                     log_printf( LOG_MSG, col_base, "" );
                 }
 
-                /* TODO */
+                /* keep track of the old parameters to avoid retraining */
+                M0.P->getrow( j, M0_row_j );
+                M1.P->getrow( j, M1_row_j );
+                M0.P->getrow( i, M0_row_i );
+                M1.P->getrow( i, M1_row_i );
+
+                /* keep track of the old likelihoods to avoid reevaluating */
+                colcpy( b0_j, L0, j, n, m  );
+                colcpy( b1_j, L1, j, n, m );
+                colcpy( b0_i, L0, i, n, m  );
+                colcpy( b1_i, L1, i, n, m );
+
+                /* reverse edge */
+                M0.remove_edge( i, j, training_seqs );
+                M1.remove_edge( i, j, training_seqs );
+                M0.add_edge( j, i, training_seqs );
+                M1.add_edge( j, i, training_seqs );
+
+                /* evaluate likelihoods for those columnn */
+                M0.update_likelihood_column( L0, n, m, j, training_seqs );
+                M1.update_likelihood_column( L1, n, m, j, training_seqs );
+                M0.update_likelihood_column( L0, n, m, i, training_seqs );
+                M1.update_likelihood_column( L1, n, m, i, training_seqs );
+
+                /* update training example likelihoods */
+                vecsub( l0, b0_j, n );
+                vecaddcol( l0, L0, n, m, j );
+                vecsub( l1, b1_j, n );
+                vecaddcol( l1, L1, n, m, j );
+
+                vecsub( l0, b0_i, n );
+                vecaddcol( l0, L0, n, m, i );
+                vecsub( l1, b1_i, n );
+                vecaddcol( l1, L1, n, m, i );
+
+
+                /* evaluate likelihood / ic */
+                l        = conditional_likelihood( n, l0, l1, cs, prior );
+                n_params = M0.num_params() + M1.num_params();
+                ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
+
+                if( ic > ic_rev_best ) {
+                    ic_rev_best = ic;
+                    i_rev_best = i;
+                    j_rev_best = j;
+                }
+
+                /* replace edge */
+                M0.set_edge( j, i, false );
+                M1.set_edge( j, i, false );
+                M0.set_edge( i, j, true );
+                M1.set_edge( i, j, true );
+
+                /* restore previous parameters */
+                M0.P->setrow( j, M0_row_j );
+                M1.P->setrow( j, M1_row_j );
+                M0.P->setrow( i, M0_row_i );
+                M1.P->setrow( i, M1_row_i );
+
+                /* restore previous likelihoods */
+                vecsubcol( l0, L0, n, m, j );
+                vecadd( l0, b0_j, n );
+                vecsubcol( l1, L1, n, m, j );
+                vecadd( l1, b1_j, n );
+
+                vecsubcol( l0, L0, n, m, i );
+                vecadd( l0, b0_i, n );
+                vecsubcol( l1, L1, n, m, i );
+                vecadd( l1, b1_i, n );
+
+                matsetcol( L0, b0_j, n, m, j );
+                matsetcol( L1, b1_j, n, m, j );
+                matsetcol( L0, b0_i, n, m, i );
+                matsetcol( L1, b1_i, n, m, i );
             }
         }
 
@@ -940,9 +999,9 @@ void train_motifs( motif& M0, motif& M1,
 
         log_puts( LOG_MSG, "\n" );
 
-        if( std::max( ic_forw_best, ic_back_best ) <= ic_curr ) break;
+        if( std::max( std::max( ic_forw_best, ic_back_best ), ic_rev_best ) <= ic_curr ) break;
 
-        if( ic_forw_best > ic_back_best ) {
+        if( ic_forw_best > ic_back_best && ic_forw_best > ic_rev_best ) {
             log_printf( LOG_MSG, " [+] %zu->%zu\n", i_forw_best, j_forw_best );
 
             ic_curr = ic_forw_best;
@@ -959,7 +1018,7 @@ void train_motifs( motif& M0, motif& M1,
             vecaddcol( l0, L0, n, m, j_forw_best );
             vecaddcol( l1, L1, n, m, j_forw_best );
         }
-        else {
+        else if( ic_back_best > ic_rev_best ) {
             log_printf( LOG_MSG, " [-] %zu->%zu\n", i_back_best, j_back_best );
             ic_curr = ic_back_best;
 
@@ -975,6 +1034,30 @@ void train_motifs( motif& M0, motif& M1,
             vecaddcol( l0, L0, n, m, j_back_best );
             vecaddcol( l1, L1, n, m, j_back_best );
         }
+        else {
+            log_printf( LOG_MSG, " [%] %zu->%zu\n", i_rev_best, j_rev_best );
+            ic_curr = ic_rev_best;
+
+            M0.remove_edge( i_rev_best, j_rev_best, training_seqs );
+            M1.remove_edge( i_rev_best, j_rev_best, training_seqs );
+            M0.add_edge( j_rev_best, i_rev_best, training_seqs );
+            M1.add_edge( j_rev_best, i_rev_best, training_seqs );
+
+            vecsubcol( l0, L0, n, m, j_rev_best );
+            vecsubcol( l1, L1, n, m, j_rev_best );
+            vecsubcol( l0, L0, n, m, i_rev_best );
+            vecsubcol( l1, L1, n, m, i_rev_best );
+
+            M0.update_likelihood_column( L0, n, m, j_rev_best, training_seqs );
+            M1.update_likelihood_column( L1, n, m, j_rev_best, training_seqs );
+            M0.update_likelihood_column( L0, n, m, i_rev_best, training_seqs );
+            M1.update_likelihood_column( L1, n, m, i_rev_best, training_seqs );
+
+            vecaddcol( l0, L0, n, m, j_rev_best );
+            vecaddcol( l1, L1, n, m, j_rev_best );
+            vecaddcol( l0, L0, n, m, i_rev_best );
+            vecaddcol( l1, L1, n, m, i_rev_best );
+        }
     }
 
 
@@ -984,8 +1067,14 @@ void train_motifs( motif& M0, motif& M1,
     delete[] L1;
     delete[] l0;
     delete[] l1;
-    delete[] b0;
-    delete[] b1;
+    delete[] M0_row_j;
+    delete[] M1_row_j;
+    delete[] M0_row_i;
+    delete[] M1_row_i;
+    delete[] b0_j;
+    delete[] b1_j;
+    delete[] b0_i;
+    delete[] b1_i;
     
     log_unindent();
 }
