@@ -589,15 +589,19 @@ double motif_log_likelihood( const motif& M0, const motif& M1,
  *                      = sum_i log( P( x_i | c_i, M ) / ( P( x_i | c = 0, M ) + P( x_i | c = 1, M ) )
  *
  */
-double conditional_likelihood( size_t n, const double* l0, const double* l1, const int* c )
+double conditional_likelihood( size_t n, const double* l0, const double* l1, const int* c,
+                               double prior )
 {
     double l;
     size_t i;
 
+    double p = log(prior);
+    double q = log(1-prior);
+
     l = 0.0;
     for( i = 0; i < n; i++ ) {
-        l += (c[i] == 0 ? l0[i] : l1[i])
-                    - logaddexp( l0[i], l1[i] );
+        l += (c[i] == 0 ? (q+l0[i]) : (p+l1[i]))
+                    - logaddexp( q+l0[i], p+l1[i] );
     }
 
     return l;
@@ -692,6 +696,13 @@ void train_motifs( motif& M0, motif& M1,
         cs[i] = (*training_seqs)[i]->c;
     }
 
+    /* set prior probability of an example being foreground */
+    double ws[2];
+    for( i = 0; i < n; i++ ) {
+        if( cs[i] <= 1 ) ws[cs[i]] += (*training_seqs)[i]->w;
+    }
+    double prior = ws[1] / (ws[0] + ws[1]);
+
 
     /* backup likelihood matrix columns, to restore state after trying a new edge */
     double* b0 = new double[ n ];
@@ -720,7 +731,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
     /* baseline ic */
-    l = conditional_likelihood( n, l0, l1, cs );
+    l = conditional_likelihood( n, l0, l1, cs, prior );
     ic_curr = compute_ic( l, n_obs, n_params, complexity_penalty );
 
 
@@ -783,7 +794,7 @@ void train_motifs( motif& M0, motif& M1,
                 vecaddcol( l1, L1, n, m, j );
 
 
-                l        = conditional_likelihood( n, l0, l1, cs );
+                l        = conditional_likelihood( n, l0, l1, cs, prior );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
@@ -850,7 +861,7 @@ void train_motifs( motif& M0, motif& M1,
                 vecaddcol( l1, L1, n, m, j );
 
                 /* evaluate likelihood / ic */
-                l        = conditional_likelihood( n, l0, l1, cs );
+                l        = conditional_likelihood( n, l0, l1, cs, prior );
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
