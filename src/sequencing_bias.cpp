@@ -392,19 +392,19 @@ void sequencing_bias::build( const char* ref_fn,
         /* adjust the current read position randomly, and sample */
         for( bg_sample_num = 0; bg_sample_num < bg_samples; bg_sample_num++ ) {
 
-            bg_pos = S[i].pos + (pos)ceil( rand_gauss( offset_std ) );
-            bg_pos = S[i].pos + (pos)ceil( rand_trunc_gauss( offset_std, 100, 100 ) );
+            //bg_pos = S[i].pos + (pos)ceil( rand_trunc_gauss( offset_std, -100, 100 ) );
 
-            if( S[i].strand ) {
-                if( bg_pos < R ) continue;
-                memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
-                seqrc( local_seq, L+1+R );
-            }
-            else {
-                if( bg_pos < L ) continue;
-                memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
-            }
+            //if( S[i].strand ) {
+                //if( bg_pos < R ) continue;
+                //memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
+                //seqrc( local_seq, L+1+R );
+            //}
+            //else {
+                //if( bg_pos < L ) continue;
+                //memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
+            //}
 
+            shuffle_array( local_seq, L+1+R );
             training_seqs.push_back( new sequence( local_seq, 0 ) );
         }
     }
