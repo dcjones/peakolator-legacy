@@ -41,6 +41,14 @@ static double rand_gauss( double sigma )
 }
 
 
+double gauss_pdf (const double x, const double sigma)
+{
+  double u = x / fabs (sigma);
+  double p = (1 / (sqrt (2 * M_PI) * fabs (sigma))) * exp (-u * u / 2);
+  return p;
+}
+
+
 /* pseudocount used when sampling foreground and background nucleotide * frequencies */
 const double sequencing_bias::pseudocount = 1;
 
@@ -238,6 +246,7 @@ void sequencing_bias::build( const char* ref_fn,
         }
         table_inc( &T, read );
     }
+    log_printf( LOG_MSG, "%zu reads\n", k );
 
     bam_destroy1(read);
 
@@ -299,9 +308,12 @@ void sequencing_bias::build( const char* ref_fn,
     /* background sampling */
     size_t bg_samples = 1; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
+    pos offset;
     pos bg_pos;
 
     double alpha; // abundance estimate
+    double alpha_norm;
+    double z;
     
     int b;
     char*          seqname   = NULL;
@@ -354,9 +366,15 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i].pos-L), (L+1+R)*sizeof(char) );
         }
 
-        bg_pos = S[i].pos + (pos)ceil( rand_gauss( offset_std ) );
-        alpha = (double)(S[i].count +
-                         table_count_pos( T, S[i].tid, bg_pos, S[i].strand )) / 2.0;
+        /* attempt to estimate abundance */
+        alpha_norm = 0.0;
+        alpha = 0.0;
+        for( offset = -2*offset_std; offset <= 2*offset_std; offset++ ) {
+            z = gauss_pdf( (double)offset, (double)offset_std );
+            alpha_norm += z;
+            alpha += z * table_count_pos( T, S[i].tid, S[i].pos + offset, S[i].strand );
+        }
+        alpha /= alpha_norm;
 
         log_printf( LOG_MSG, "seq (%0.4e): %s\n", (double)S[i].count / alpha, local_seq );
 
