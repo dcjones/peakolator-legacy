@@ -701,6 +701,9 @@ void train_motifs( motif& M0, motif& M1,
     size_t j_rev_best, i_rev_best;
 
 
+    /* for cycle detection */
+    bool has_ij_path;
+
     /* parameters to compute information criterion */
     double n_obs    = training_seqs->size();
     double n_params = M0.num_params() + M1.num_params();
@@ -708,7 +711,6 @@ void train_motifs( motif& M0, motif& M1,
 
     /* log conditional likelihood */
     double l; 
-
 
     /* baseline ic */
     l = conditional_likelihood( n, l0, l1, cs, prior );
@@ -718,7 +720,7 @@ void train_motifs( motif& M0, motif& M1,
     /* for pretty output */
     size_t col;
     const char* col_base = "\n%34s";
-    const size_t col_max = 20;
+    const size_t col_max = 30;
 
 
     size_t round_num = 0;
@@ -884,6 +886,9 @@ void train_motifs( motif& M0, motif& M1,
                     j_back_best = j;
                 }
 
+                /* TODO: delete me */
+                //log_printf( LOG_MSG, "\n(%zu,%zu) : %0.4e\n", i, j, ic );
+
                 /* replace edge */
                 M0.set_edge( i, j, true );
                 M1.set_edge( i, j, true );
@@ -907,12 +912,31 @@ void train_motifs( motif& M0, motif& M1,
         /* phase 3: try all possible edge reversals */
         for( j = 0; j < M0.n; j++ ) {
             for( i = 0; i < M0.n; i++ ) {
+
+                /* skip nonsense reversals */
                 if( i == j ) continue;
+
+                /* skip reversals that add parameters */
                 if( !(M0.has_edge( i, j ) && M0.has_edge( i, i ) && M0.has_edge( j, j )) ) {
                     continue;
                 }
 
-                log_puts( LOG_MSG, "%" );
+                /* skip reversals that would introduce cycles:
+                 * this is determined by cuting the (i,j) edge, then recomputing
+                 * reachability to see if an i, j path remains */
+                M0.set_edge( i, j, false );
+                M0.compute_reachability();
+
+                has_ij_path = M0.reachable( i, j );
+
+                M0.set_edge( i, j, true );
+                M0.compute_reachability();
+
+                if( has_ij_path ) continue;
+
+
+
+                log_puts( LOG_MSG, "." );
                 if( ++col > col_max ) {
                     col = 0;
                     log_printf( LOG_MSG, col_base, "" );
@@ -964,6 +988,9 @@ void train_motifs( motif& M0, motif& M1,
                     i_rev_best = i;
                     j_rev_best = j;
                 }
+
+                /* TODO: delete me */
+                //log_printf( LOG_MSG, "\n(%zu,%zu) : %0.4e\n", i, j, ic );
 
                 /* replace edge */
                 M0.set_edge( j, i, false );
@@ -1035,7 +1062,7 @@ void train_motifs( motif& M0, motif& M1,
             vecaddcol( l1, L1, n, m, j_back_best );
         }
         else {
-            log_printf( LOG_MSG, " [%] %zu->%zu\n", i_rev_best, j_rev_best );
+            log_printf( LOG_MSG, " [.] %zu->%zu\n", i_rev_best, j_rev_best );
             ic_curr = ic_rev_best;
 
             M0.remove_edge( i_rev_best, j_rev_best, training_seqs );
