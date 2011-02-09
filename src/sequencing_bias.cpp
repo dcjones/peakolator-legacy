@@ -366,24 +366,10 @@ void sequencing_bias::build( const char* ref_fn,
             memcpy( local_seq, seq + (S[i].pos-L), (L+1+R)*sizeof(char) );
         }
 
-        /* attempt to estimate abundance */
-        //alpha_norm = 0.0;
-        //alpha = 0.0;
-        //for( offset = -offset_std; offset <= offset_std; offset++ ) {
-            //z = gauss_pdf( (double)offset, (double)offset_std );
-            //alpha_norm += z;
-            //alpha += z * table_count_pos( T, S[i].tid, S[i].pos + offset, S[i].strand );
-        //}
-        //alpha /= alpha_norm;
-       
-        alpha = S[i].count;
-        alpha += table_count_pos( T, S[i].tid, S[i].pos - 1, S[i].strand );
-        alpha += table_count_pos( T, S[i].tid, S[i].pos + 1, S[i].strand );
-        alpha /= 3;
 
-        log_printf( LOG_MSG, "seq (%0.4e): %s\n", (double)S[i].count / alpha, local_seq );
+        log_printf( LOG_MSG, "seq: %s\n", local_seq );
 
-        training_seqs.push_back( new sequence( local_seq, 1,  (double)S[i].count / alpha ) );
+        training_seqs.push_back( new sequence( local_seq, 1 ) );
 
 
         /* add a background sequence */
