@@ -153,21 +153,30 @@ void kmer_matrix::dist_conditionalize( int effective_k )
 }
 
 
-void kmer_matrix::dist_conditionalize_row( size_t i, int effective_k  )
+void kmer_matrix::dist_conditionalize_row( size_t i, size_t j, int effective_k  )
 {
     if( effective_k <= 0 ) effective_k = m;
-
-    kmer L;
-    kmer L_max = 1 << (2*(effective_k-1));
+    kmer L, R;
+    kmer L_max = 1 << (2*j);
+    kmer R_max = 1 << (2*(effective_k-j-1));
     kmer K;
-    kmer nt;
     double z;
+    kmer nt;
 
     for( L = 0; L < L_max; L++ ) {
-        K = L<<2;
-        z = 0.0;
-        for( nt = 0; nt < 4; nt++ ) z += A[ i * m + (nt | K) ];
-        for( nt = 0; nt < 4; nt++ ) A[ i * m + (nt | K) ] /= z;
+        for( R = 0; R < R_max; R++ ) { 
+            z = 0.0;
+
+            for( nt = 0; nt < 4; nt++ ) {
+                K = (L<<(2*(effective_k-j))) | (nt<<(2*(effective_k-j-1))) | R;
+                z += A[ i*m + K ];
+            }
+
+            for( nt = 0; nt < 4; nt++ ) {
+                K = (L<<(2*(effective_k-j))) | (nt<<(2*(effective_k-j-1))) | R;
+                A[ i*m + K ] /= z;
+            }
+        }
     }
 }
 
@@ -290,6 +299,10 @@ motif::motif( const YAML::Node& node )
     }
 
     P = new kmer_matrix( node["P"] );
+
+    R = new bool[n*n];
+    memset( R, 0, n*n*sizeof(bool) );
+    compute_reachability();
 }
 
 motif::motif( size_t n, size_t k, int c )
@@ -300,6 +313,9 @@ motif::motif( size_t n, size_t k, int c )
 
     parents = new bool[n*n];
     memset( parents, 0, n*n*sizeof(bool) );
+
+    R = new bool[n*n];
+    memset( R, 0, n*n*sizeof(bool) );
 }
 
 
@@ -312,6 +328,9 @@ motif::motif( const motif& M )
 
     parents = new bool[n*n];
     memcpy( parents, M.parents, n*n*sizeof(bool) );
+
+    R = new bool[n*n];
+    memset( R, 0, n*n*sizeof(bool) );
 }
 
 
@@ -319,6 +338,7 @@ motif::motif( const motif& M )
 motif::~motif()
 {
     delete[] parents;
+    delete[] R;
     delete P;
 }
 
@@ -384,7 +404,7 @@ size_t motif::num_parents( size_t i ) const
 {
     size_t j;
     size_t M = 0;
-    for( j = 0; j <= i; j++ ) {
+    for( j = 0; j < n; j++ ) {
         if( parents[i*n+j] ) M++;
     }
 
@@ -399,6 +419,27 @@ bool motif::has_edge( size_t i, size_t j )
 void motif::set_edge( size_t i, size_t j, bool x )
 {
     parents[j*n+i] = x;
+}
+
+bool motif::reachable( size_t i, size_t j )
+{
+    return R[j*n+i];
+}
+
+void motif::compute_reachability()
+{
+    /* find the transitive closure of the parents matrix via flyod-warshall */
+
+    memcpy( R, parents, n*n*sizeof(bool) );
+
+    size_t k, i, j;
+    for( k = 0; k < n; k++ ) {
+        for( i = 0; i < n; i++ ) {
+            for( j = 0; j < n; j++ ) {
+                R[j*n+i] = R[j*n+i] || (R[k*n+i] && R[j*n+k]);
+            }
+        }
+    }
 }
 
 
@@ -436,9 +477,10 @@ char* motif::print_model_graph( int offset )
 
 
     for( j = 0; j < (int)n; j++ ) {
+        if( i == j ) continue;
         if( !parents[j*n+j] ) continue;
 
-        for( i = 0; i < j; i++ ) {
+        for( i = 0; i < n; i++ ) {
             if( parents[j*n+i] ) {
                 r = asprintf( &tmp, "n%d -> n%d;\n", i, j );
                 graph_str += tmp;
@@ -454,47 +496,10 @@ char* motif::print_model_graph( int offset )
 }
 
 
-void motif::add_all_edges( const std::deque<sequence*>* data )
-{
-    size_t i, j;
-    size_t n_parents;
-    size_t m;
-    kmer K;
-    std::deque<sequence*>::const_iterator seq;
-
-    for( j = 0; j < n; j++ ) {
-        for( i = k-1 <= j ? j-(k-1) : 0; i <= j; i++ ) {
-            set_edge( i, j, true );
-        }
-        P->setrow( j, 0.0 );
-        n_parents = num_parents(j);
-        m = 1 << (2*n_parents);
-
-        for( K = 0; K < m; K++ ) {
-            (*P)( j, K ) = pseudocount;
-        }
-
-        for( seq = data->begin(); seq != data->end(); seq++ ) {
-            if( (*seq)->c == c && (*seq)->get( parents + j*n, n, K ) ) {
-                (*P)( j, K )++;
-            }
-        }
-
-        P->dist_normalize_row( j );
-        P->dist_conditionalize_row( j, n_parents );
-        P->log_transform_row( j, n_parents );
-    }
-}
-
-
 /* make an edge i --> j
  * That is, condition j on i. */
 void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
-    if( i > j ) {
-        failf( "Invalid motif edge (%zu, %zu)\n", i, j );
-    }
-
     set_edge( i, j, true );
 
     P->setrow( j, 0.0 );
@@ -513,19 +518,23 @@ void motif::add_edge( size_t i, size_t j, const std::deque<sequence*>* data )
         }
     }
 
+    size_t n_pred_parents = 0;
+    size_t u;
+    for( u = 0; u < j; u++ ) {
+        if( has_edge( u, j ) ) n_pred_parents++;
+    }
+
     P->dist_normalize_row( j );
-    P->dist_conditionalize_row( j, n_parents );
+    P->dist_conditionalize_row( j, n_pred_parents, n_parents );
     P->log_transform_row( j, n_parents );
+
+    compute_reachability();
 }
 
 
 
 void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
 {
-    if( i > j ) {
-        failf( "Invalid motif edge (%zu, %zu)\n", i, j );
-    }
-
     set_edge( i, j, false );
 
     P->setrow( j, 0.0 );
@@ -544,36 +553,20 @@ void motif::remove_edge( size_t i, size_t j, const std::deque<sequence*>* data )
         }
     }
 
-    P->dist_normalize_row( j );
-    P->dist_conditionalize_row( j, n_parents );
-    P->log_transform_row( j, n_parents );
-}
-
-
-
-
-
-double motif_log_likelihood( const motif& M0, const motif& M1,
-                             const std::deque<sequence*>* training_seqs )
-{
-    double L, L0, L1;
-
-    L = 0.0;
-    
-    std::deque<sequence*>::const_iterator i;
-    for( i = training_seqs->begin(); i != training_seqs->end(); i++ ) {
-        L0 = M0.eval( **i );
-        L1 = M1.eval( **i );
-        if( (*i)->c == 0 ) {
-            L += (*i)->w * (L0 - logaddexp( L0, L1 ));
-        }
-        else if( (*i)->c == 1 ) {
-            L += (*i)->w * (L1 - logaddexp( L0, L1 ));
-        }
+    size_t n_pred_parents = 0;
+    size_t u;
+    for( u = 0; u < j; u++ ) {
+        if( has_edge( u, j ) ) n_pred_parents++;
     }
 
-    return L;
+    P->dist_normalize_row( j );
+    P->dist_conditionalize_row( j, n_pred_parents, n_parents );
+    P->log_transform_row( j, n_parents );
+
+    compute_reachability();
 }
+
+
 
 
 
@@ -671,7 +664,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
     size_t i, j;
-    size_t i_start;
+    size_t i_start, i_end;
 
     const size_t n = training_seqs->size();
     const size_t m = M0.n;
@@ -746,27 +739,39 @@ void train_motifs( motif& M0, motif& M1,
         j_forw_best = i_forw_best = j_back_best = i_back_best = 0;
 
 
-        /* search forwards */
+        /* phase 1: try all possible edge additions */
         for( j = 0; j < M0.n; j++ ) {
 
             if( M0.has_edge( j, j ) ) {
                 if( max_dep_dist == 0 || j <= max_dep_dist ) i_start = 0;
-                else i_start = i - max_dep_dist;
+                else i_start = j - max_dep_dist;
+
+                if( max_dep_dist == 0 ) i_end = M0.n - 1;
+                else i_end = std::min( M0.n-1, j + max_dep_dist );
             }
-            else i_start = j;
+            else i_start = i_end = j;
 
 
-            for( i = i_start; i <= j; i++ ) {
 
+            for( i = i_start; i <= i_end; i++ ) {
+
+                /* skip existing edges  */
                 if( M0.has_edge( i, j ) ) {
                     continue;
                 }
 
+                /* skip edges that would introduce cycles */
+                if( M0.reachable( j, i ) ) {
+                    continue;
+                }
+
+                /* skip edges that would exceed the parent limit */
                 if( M0.num_parents(j) >= M0.k ) {
                     continue;
                 }
 
                 log_puts( LOG_MSG, "+" );
+
 
                 /* keep track of the old parameters to avoid retraining */
                 M0.store_row(j);
@@ -798,15 +803,15 @@ void train_motifs( motif& M0, motif& M1,
                 n_params = M0.num_params() + M1.num_params();
                 ic       = compute_ic( l, n_obs, n_params, complexity_penalty );
 
-                /* TODO: DELETE ME */
-                log_printf( LOG_MSG, "\nL = %0.4e, ic = %0.4e\n", l, ic );
 
-                if( ic > ic_forw_best ) {
+                if( ic >= ic_forw_best ) {
                     ic_forw_best = ic;
                     i_forw_best = i;
                     j_forw_best = j;
                 }
         
+                /* TODO: delete me */
+                //log_printf( LOG_MSG, "\n(%zu,%zu) : %0.4e\n", i, j, ic );
 
                 /* remove edge */
                 M0.set_edge( i, j, false );
@@ -828,15 +833,12 @@ void train_motifs( motif& M0, motif& M1,
             }
         }
 
-        /* search backwards */
+        /* phase 2: try all possible edge removals */
         for( j = 0; j < M0.n; j++ ) {
-
-            /* do not remove the position unless it has no edges */
-            i_last = M0.num_parents(j) > 1 ? j-1 : j;
-
-            for( i = 0; i <= i_last; i++ ) {
+            for( i = 0; i < M0.n; i++ ) {
 
                 if( !M0.has_edge( i, j ) ) continue;
+                if( i == j && M0.num_parents(j) > 1 ) continue;
 
                 log_puts( LOG_MSG, "-" );
 
@@ -891,6 +893,19 @@ void train_motifs( motif& M0, motif& M1,
 
                 matsetcol( L0, b0, n, m, j );
                 matsetcol( L1, b1, n, m, j );
+            }
+        }
+
+        /* phase 3: try all possible edge reversals */
+        for( j = 0; j < M0.n; j++ ) {
+            for( i = 0; i < M0.n; i++ ) {
+                if( !(M0.has_edge( i, j ) && M0.has_edge( i, i ) && M0.has_edge( 1, 1 )) ) {
+                    continue;
+                }
+
+                log_puts( LOG_MSG, "=" );
+
+                /* TODO */
             }
         }
 

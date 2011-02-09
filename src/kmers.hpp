@@ -46,7 +46,7 @@ class kmer_matrix
         void dist_marginalize( size_t i, size_t j );
 
         void dist_conditionalize( int effective_k = -1 );
-        void dist_conditionalize_row( size_t i, int effective_k = -1 );
+        void dist_conditionalize_row( size_t i, size_t j, int effective_k = -1 );
         void log_transform_row( size_t i, int effective_k = -1 );
 
         /* allows one row to be stored then reset, which is used when searching
@@ -57,9 +57,9 @@ class kmer_matrix
 
     private:
 
-        size_t k;
-        
-        size_t n, m;
+        size_t k; // size of k-mer
+        size_t n; // number of positions
+        size_t m; // 4^k
         double* A;
 
         double* stored_row;
@@ -112,7 +112,6 @@ class motif
 
         void add_edge( size_t i, size_t j, const std::deque<sequence*>* data );
         void remove_edge( size_t i, size_t j, const std::deque<sequence*>* data );
-        void add_all_edges( const std::deque<sequence*>* data );
 
         double eval( const sequence&, size_t offset = 0 ) const;
         double eval_node( size_t i, const std::deque<sequence*>* data,
@@ -132,6 +131,9 @@ class motif
         bool has_edge( size_t i, size_t j );
         void set_edge( size_t i, size_t j, bool );
 
+        bool reachable( size_t i, size_t j );
+        void compute_reachability();
+
 
         void update_likelihood_column( double* L, size_t n, size_t m, size_t j,
                                        const std::deque<sequence*>* training_seqs );
@@ -141,6 +143,7 @@ class motif
         kmer_matrix* P;
 
         bool* parents;
+        bool* R; // reachability
 
         static const double pseudocount;
 
