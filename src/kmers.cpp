@@ -772,6 +772,9 @@ void train_motifs( motif& M0, motif& M1,
                     continue;
                 }
 
+                /* skip (i,j) edges if i and j aren't both in the network */
+                if( i != j && !(M0.has_edge( i, i ) && M0.has_edge( j, j )) ) continue;
+
 
                 log_puts( LOG_MSG, "+" );
                 if( ++col > col_max ) {
