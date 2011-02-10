@@ -598,13 +598,15 @@ void motif::update_likelihood_column( double* L, size_t n, size_t m, size_t j,
 /* Akaike Information Criterion */
 double aic( double L, double n_obs, double n_params, double c = 1.0 )
 {
-    return L - c*n_params*n_obs / (n_obs - n_params - 1.0);
+    return L - c*n_params;
 }
 
-double caic( double L, double n_obs, double n_params, double c = 1.0 )
+/* Akaike Information Criterion with second order small-sample bias correction.
+ * (From Hurvich and Tsai (1989)) */
+double aicc( double L, double n_obs, double n_params, double c = 1.0 )
 {
-    return L - c*n_params -
-            2 * (n_params + 1) * (n_params + 2) / (n_obs - n_params - 2);
+    return L - c*n_params
+             - (n_params + 1) * (n_params + 2) / (n_obs - n_params - 2);
 }
 
 /* Bayesian (Schwarz) Information Criterion */
@@ -612,14 +614,6 @@ double bic( double L, double n_obs, double n_params, double c = 1.0 )
 {
     return 2.0*L - c*n_params*log(n_obs);
 }
-
-
-/* Hannan-Quinn Information Criterion */
-double hqic( double L, double n_obs, double n_params, double c = 1.0 )
-{
-    return L - c*n_params*log(log(n_obs));
-}
-
 
 
 void train_motifs( motif& M0, motif& M1,
@@ -634,7 +628,7 @@ void train_motifs( motif& M0, motif& M1,
         failf( "Motif models of mismatching size. (%zu != %zu)\n", M0.n, M1.n );
     }
 
-    double (*compute_ic)( double, double, double, double ) = caic;
+    double (*compute_ic)( double, double, double, double ) = aicc;
 
 
     size_t i, j;
@@ -771,9 +765,6 @@ void train_motifs( motif& M0, motif& M1,
                 if( i < j && M0.num_parents(j) == 1 && M0.num_parents(i) == 1 ) {
                     continue;
                 }
-
-                /* skip (i,j) edges if i and j aren't both in the network */
-                if( i != j && !(M0.has_edge( i, i ) && M0.has_edge( j, j )) ) continue;
 
 
                 log_puts( LOG_MSG, "+" );
