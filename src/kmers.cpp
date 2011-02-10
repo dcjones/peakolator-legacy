@@ -631,8 +631,8 @@ void train_motifs( motif& M0, motif& M1,
     double (*compute_ic)( double, double, double, double ) = aicc;
 
 
-    size_t i, j;
-    size_t i_start, i_end;
+    int i, j;
+    int i_start, i_end;
 
     const size_t n = training_seqs->size();
     const size_t m = M0.n;
@@ -682,17 +682,15 @@ void train_motifs( motif& M0, motif& M1,
 
     /* keeping track of the optimal edge */
     double ic, ic_curr;
-           
-    size_t i_last;
 
     double ic_forw_best;
-    size_t j_forw_best, i_forw_best;
+    int j_forw_best, i_forw_best;
 
     double ic_back_best;
-    size_t j_back_best, i_back_best;
+    int j_back_best, i_back_best;
 
     double ic_rev_best;
-    size_t j_rev_best, i_rev_best;
+    int j_rev_best, i_rev_best;
 
 
     /* for cycle detection */
@@ -731,7 +729,7 @@ void train_motifs( motif& M0, motif& M1,
 
 
         /* phase 1: try all possible edge additions */
-        for( j = 0; j < M0.n; j++ ) {
+        for( j = M0.n-1; j >= 0; j-- ) {
 
             if( M0.has_edge( j, j ) ) {
                 if( max_dep_dist == 0 || j <= max_dep_dist ) i_start = 0;
@@ -762,7 +760,7 @@ void train_motifs( motif& M0, motif& M1,
                 }
 
                 /* skip edges that are equivalent to one already tried */
-                if( i < j && M0.num_parents(j) == 1 && M0.num_parents(i) == 1 ) {
+                if( i > j && M0.num_parents(j) == 1 && M0.num_parents(i) == 1 ) {
                     continue;
                 }
 
