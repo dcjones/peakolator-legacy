@@ -375,8 +375,8 @@ size_t bisect( struct hashed_value* xs, size_t m, int32_t start )
     while( a < b ) {
         i = a + (b - a) / 2;
 
-        if( xs[i].pos < start )                  a = i;
-        else if( i > 0 && start <= xs[i-1].pos ) b = i;
+        if( xs[i].pos < start )                  a = i + 1;
+        else if( i > 0 && start <= xs[i-1].pos ) b = i - 1;
 
         /* xs[i-1].pos <= start <= xs[i] */
         else break;
