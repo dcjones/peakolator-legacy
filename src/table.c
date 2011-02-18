@@ -304,8 +304,8 @@ void read_counts_create( struct read_counts* C, const struct table* T )
 
             for( i = 0, j = 0; j < primes[n]; j++ ) {
                 if( ys[j].pos != nilpos ) {
-                    xs[i].pos   = ys[i].pos;
-                    xs[i].count = ys[i].count;
+                    xs[i].pos   = ys[j].pos;
+                    xs[i].count = ys[j].count;
                     i++;
                 }
             }
@@ -372,7 +372,7 @@ size_t bisect( struct hashed_value* xs, size_t m, int32_t start )
     size_t b = m;
     size_t i = 0;
 
-    while( a < b ) {
+    while( a <= b ) {
         i = a + (b - a) / 2;
 
         if( xs[i].pos < start )                  a = i + 1;
