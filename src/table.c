@@ -20,6 +20,14 @@ static const double max_load = 0.75;
 static const int32_t nilpos = -1;
 
 
+#ifndef MIN
+#define MIN(a,b) ((a)<=(b)?(a):(b))
+#endif
+
+#ifndef MAX
+#define MAX(a,b) ((a)>=(b)?(a):(b))
+#endif
+
 
 /* From Thomas Wang (http://www.cris.com/~Ttwang/tech/inthash.htm) */
 uint32_t hash( uint32_t a)
@@ -449,12 +457,12 @@ void read_count_occurances( const struct read_counts* C,
     /* Ignore and leading or trailing zeros if we are at the start or end of the
      * sequence. Many genome assemblies have several kilobases of N's at the
      * beginning and end. Considering these will lead to deflated statistics. */
-    if( start == 0 ) {
-        zeros -= xs[0].pos - start;
+    if( start <= xs[0].pos ) {
+        zeros -= MIN( end, xs[0].pos ) - start + 1;
     }
 
-    if( end >= m ) {
-        zeros -= end - xs[m-1].pos;
+    if( end >= xs[m-1].pos ) {
+        zeros -= end - MAX( start, xs[m-1].pos ) + 1;
     }
 
     ks[0] += zeros;
