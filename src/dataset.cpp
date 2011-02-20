@@ -183,8 +183,6 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     delete[] ks;
 
 
-    double ks_mean = gsl_histogram_mean( ksh );
-    double ks_var  = sq( gsl_histogram_sigma( ksh ) );
 
     const double lower[]     = { 1e-20, 1e-20 };
     const double upper[]     = { HUGE_VAL, 1.0 };
@@ -200,6 +198,12 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
 
     double rp[2];
     /* initialize with the method of moments estimations */
+    double ks_mean = gsl_histogram_mean( ksh );
+    double ks_var  = sq( gsl_histogram_sigma( ksh ) );
+
+    /* variance > mean, for a negative binomial distribution */
+    ks_var = max( ks_var, ks_mean + 1e-6 );
+
     rp[0] = sq( ks_mean ) / (ks_var - ks_mean);
     rp[1] = rp[0] / (rp[0] + ks_mean);
 
