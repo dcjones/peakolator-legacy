@@ -178,7 +178,18 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     gsl_histogram* ksh = gsl_histogram_alloc( max_k+1 );
     gsl_histogram_set_ranges_uniform( ksh, 0.0, (double)(max_k+1) );
 
+
+
+    /* for debugging purposes */
     size_t j;
+    for( j = 0; j <= max_k; j++ ) {
+        if( (j + 1) % 10 ) log_printf( LOG_BLAB, "\n" );
+        log_printf( LOG_BLAB, "[%zu] %llu  " );
+    }
+    log_printf( LOG_BLAB, "\n" );
+
+
+
     for( j = 0; j <= max_k; j++ ) ksh->bin[j] = (double)ks[j];
     delete[] ks;
 
