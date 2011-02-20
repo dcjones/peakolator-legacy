@@ -183,8 +183,8 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     /* for debugging purposes */
     size_t j;
     for( j = 0; j <= max_k; j++ ) {
-        if( (j + 1) % 10 ) log_printf( LOG_BLAB, "\n" );
-        log_printf( LOG_BLAB, "[%zu] %llu  " );
+        if( (j + 1) % 10 == 0 ) log_printf( LOG_BLAB, "\n" );
+        log_printf( LOG_BLAB, "[%zu] %llu  ", j, ks[j] );
     }
     log_printf( LOG_BLAB, "\n" );
 
