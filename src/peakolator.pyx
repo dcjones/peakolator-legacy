@@ -200,12 +200,12 @@ cdef class dataset:
             interval_stack_push( IS, I.seqname, I.start, I.end, I.strand )
 
 
-        cdef double r, p
-        self.cthis.fit_null_distr( IS, &r, &p )
+        cdef double r, p, a
+        self.cthis.fit_null_distr( IS, &r, &p, &a )
 
         del_interval_stack( IS )
 
-        return (float(r),float(p))
+        return (float(r),float(p),float(a))
 
 
 

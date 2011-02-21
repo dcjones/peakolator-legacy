@@ -613,7 +613,8 @@ def scan( args, data, chrom_sizes, regions ):
             training_intervals.append(
                     peakolator.interval( seqname, start, end, strand ) )
 
-    params.r, params.p = data.fit_null_distr( training_intervals )
+    # TODO: do something with a
+    params.r, params.p, a = data.fit_null_distr( training_intervals )
 
 
 

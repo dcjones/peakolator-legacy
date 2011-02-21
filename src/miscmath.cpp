@@ -38,6 +38,22 @@ double logsubexp( double x, double y )
 
 
 #ifdef HAVE_LIBGSL
+
+double binco( double n, double k )
+{
+   return gsl_sf_gamma( n + 1.0 ) /
+          ( gsl_sf_gamma( n - k + 1.0 ) * gsl_sf_gamma( k + 1.0 ) );
+}
+
+
+double lbinco( double n, double k )
+{
+   return gsl_sf_lngamma( n + 1.0 )
+          - gsl_sf_lngamma( n - k + 1.0 )
+          - gsl_sf_lngamma( k + 1.0 );
+}
+
+
 double log_beta_inc( double a, double b, double x )
 {
     /* Using Soper's Method, which possibly converges more slowly than the
@@ -78,11 +94,156 @@ double log_beta_inc( double a, double b, double x )
 }
 
 
+double ldbinom( unsigned int x, double p, unsigned int n )
+{
+    return lbinco( n, x ) + (double)x * log(p) + (double)(n-x) * log(1.0 - p);
+}
+
+
+double ldnbinom( unsigned int x_, double r, double p )
+{
+    double x = (double)x_;
+    double ans;
+    ans = r * log(p) + x * log( 1.0 - p );
+    ans += gsl_sf_lngamma( r + x );
+    ans -= (gsl_sf_lnfact( x_ ) + gsl_sf_lngamma( r ));
+
+    return ans;
+}
+
+
 double lpnbinom( unsigned int q, double r, double p, bool lower_tail )
 {
-    if( lower_tail ) return log_beta_inc( r, q + 1.0, p );
-    else             return log_beta_inc( q + 1.0, r, 1.0 - p );
+    if( lower_tail ) return log_beta_inc( r, (double)q + 1.0, p );
+    else             return log_beta_inc( (double)q + 1.0, r, 1.0 - p );
 }
+
+
+
+double ddnbsum( unsigned int x, double r, double p, unsigned int d )
+{
+    if( x < d ) return 0.0;
+
+    int sgn = -1;
+    double a, ans = 0.0;
+
+    double u1 = pow( p, x );
+    double u2 = pow( pow( 1.0 - p, -r ) - 1.0, d );
+
+    unsigned int k;
+    for( k = d; k > 0; k-- ) {
+        sgn *= -1;
+
+        a =  binco( d, k );
+        a *= binco( x + k * r - 1, x );
+        a *= u1;
+        a /= u2;
+
+        if( sgn < 0 ) ans -= a;
+        else          ans += a;
+    }
+
+    return ans;
+}
+
+
+
+double pdnbsum( unsigned int x, double r, double p,
+                unsigned int d, bool lower_tail )
+{
+    if( x < d ) return 0.0;
+
+    int sgn = -1;
+    double a, ans = 0.0;
+
+
+    unsigned int k;
+    for( k = d; k > 0; k-- ) {
+        sgn *= -1;
+        a = binco( d,k );
+        a *= pow( 1.0 - p, - (double)k * r );
+        a *= gsl_sf_beta_inc( x + 1.0, k * r, p );
+
+        if( sgn < 0 ) ans -= a;
+        else          ans += a;
+    }
+
+    ans *= pow( pow( 1.0 - p, -r ), -d );
+
+    if( lower_tail ) ans = 1.0 - ans;
+
+    return ans;
+}
+
+
+double lddnbsum( unsigned int x, double r, double p, size_t d )
+{
+    if( x < d ) return GSL_NEGINF;
+
+    double lp = log( p );
+    double lq = log( 1.0 - p );
+
+    double a, ans = GSL_NAN;
+    int sgn = -1;
+
+    size_t k;
+    for( k = d; k > 0; k-- ) {
+        sgn *= -1;
+
+        a =  lbinco( d, k );
+        a += lbinco( x + k * r - 1.0, x );
+        a += x * lp;
+        a -= d * logsubexp( -r * lq, 0.0 );
+
+        if( k == d )         ans = a;
+        else if( sgn < 0.0 ) ans = logsubexp( ans, a );
+        else                 ans = logaddexp( ans, a );
+    }
+
+    return ans;
+}
+
+
+double lpdnbsum( unsigned int x, double r, double p,
+                 unsigned int d, bool lower_tail )
+{
+    if( x < d ) return GSL_NEGINF;
+
+    double lp = log( p );
+    double lq = log( 1.0 - p );
+
+    double a, ans = GSL_NAN;
+    int sgn = -1;
+
+    size_t k;
+    for( k = d; k > 0; k-- ) {
+        sgn *= -1;
+
+        a = lbinco( d, k );
+        a += -k * r * lq;
+        a += log_beta_inc( x + 1.0, k * r, p );
+
+        if( k == d )       ans = a;
+        else if( sgn < 0 ) ans = logsubexp( ans, a );
+        else               ans = logaddexp( ans, a );
+    }
+
+    ans -= d * logsubexp( -r * lq, 0.0 );
+
+    if( lower_tail ) ans = logsubexp( 0.0, ans );
+
+    return ans;
+}
+
+
+double ldzinb( unsigned int x, double r, double p, double a )
+{
+    if( x == 0.0 ) return logaddexp( log(a), log(1.0 - a) + ldnbinom( x, r, p )  );
+    else           return log(1.0 - a) + ldnbinom( x, r, p );
+}
+
+
+
 #endif
 
 

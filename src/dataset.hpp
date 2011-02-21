@@ -22,7 +22,7 @@ class dataset
 
         void load_sequence_bias( const char* ref_fn, const char* bias_fn );
 
-        void fit_null_distr( interval_stack* is, double* r, double* p );
+        void fit_null_distr( interval_stack* is, double* r, double* p, double *a );
 
         size_t n_targets() const { return reads_f->header->n_targets; }
 

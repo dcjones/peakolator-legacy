@@ -2,6 +2,7 @@
 #include "dataset.hpp"
 #include "context.hpp"
 #include "logger.h"
+#include "miscmath.hpp"
 
 #include <algorithm>
 
@@ -132,6 +133,28 @@ dataset::~dataset()
 }
 
 
+/* zero-inflated negative binomial log-likelihood function */
+double zinb_ll_f( unsigned int n, const double* rpa, double* grad, void* params )
+{
+    gsl_histogram* ksh = (gsl_histogram*)params;
+    double r = rpa[0];
+    double p = rpa[1];
+    double a = rpa[2];
+
+    double ll = 0.0;
+
+    size_t k;
+    for( k = 0; k < ksh->n; k++ ) {
+        ll += ksh->bin[k] * ldzinb( k, r, p, a );
+    }
+
+    log_printf( LOG_BLAB, "r = %0.4e, p = %0.4e, a = %0.4e, L = %0.4e\n",
+                r, p, a, ll );
+
+    return ll;
+}
+
+
 double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
 {
     gsl_histogram* ksh = (gsl_histogram*)params;
@@ -141,12 +164,7 @@ double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
     double ll = 0.0;
     size_t k;
     for( k = 0; k < ksh->n; k++ ) {
-        ll += ksh->bin[k]
-           *  (r * log(p)
-           +  (double)k * log( 1.0 - p )
-           +  gsl_sf_lngamma( r + (double)k )
-           -  (gsl_sf_lnfact( k )
-           +  gsl_sf_lngamma( r )));
+        ll += ksh->bin[k] * ldnbinom( k, r, p );
     }
 
     log_printf( LOG_BLAB, "r = %0.4e, p = %0.4e, L = %0.4e\n",
@@ -156,7 +174,7 @@ double nb_ll_f( unsigned int n, const double* rp, double* grad, void* params )
 }
 
 
-void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
+void dataset::fit_null_distr( interval_stack* is, double* r, double* p, double* a )
 {
     log_puts( LOG_MSG, "fitting null distribution ... \n" );
     log_indent();
@@ -194,20 +212,21 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     delete[] ks;
 
 
+    const double TINY_VAL = 1e-16;
 
-    const double lower[]     = { 1e-20, 1e-20 };
-    const double upper[]     = { HUGE_VAL, 1.0 };
-    const double step_size[] = { 1e-2, 1e-2 };
+    const double lower[]     = { TINY_VAL, TINY_VAL, TINY_VAL };
+    const double upper[]     = { HUGE_VAL, 1.0 - TINY_VAL, 1.0 - TINY_VAL };
+    const double step_size[] = { 0.5, 0.1, 0.1 };
     
-    nlopt_opt fmax = nlopt_create( NLOPT_LN_SBPLX, 2 );
-    nlopt_set_max_objective( fmax, nb_ll_f, (void*)ksh );
+    nlopt_opt fmax = nlopt_create( NLOPT_LN_SBPLX, 3 );
+    nlopt_set_max_objective( fmax, zinb_ll_f, (void*)ksh );
     nlopt_set_lower_bounds( fmax, lower );
     nlopt_set_upper_bounds( fmax, upper );
     nlopt_set_initial_step( fmax, step_size );
     nlopt_set_ftol_rel( fmax, 1e-12 );
     nlopt_set_maxeval( fmax, 1000 );
 
-    double rp[2];
+    double rpa[3];
     /* initialize with the method of moments estimations */
     double ks_mean = gsl_histogram_mean( ksh );
     double ks_var  = sq( gsl_histogram_sigma( ksh ) );
@@ -215,20 +234,22 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p )
     /* variance > mean, for a negative binomial distribution */
     ks_var = max( ks_var, ks_mean + 1e-6 );
 
-    rp[0] = sq( ks_mean ) / (ks_var - ks_mean);
-    rp[1] = rp[0] / (rp[0] + ks_mean);
+    rpa[0] = sq( ks_mean ) / (ks_var - ks_mean);
+    rpa[1] = rpa[0] / (rpa[0] + ks_mean);
+    rpa[2] = 0.5;
 
     log_puts( LOG_MSG, "optimizing ... " );
     log_indent();
 
     double f_opt;
-    nlopt_optimize( fmax, rp, &f_opt );
+    nlopt_optimize( fmax, rpa, &f_opt );
 
     log_unindent();
     log_puts( LOG_MSG, "done.\n" );
 
-    *r = rp[0];
-    *p = rp[1];
+    *r = rpa[0];
+    *p = rpa[1];
+    *a = rpa[2];
 
     gsl_histogram_free( ksh );
     log_unindent();

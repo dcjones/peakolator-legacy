@@ -58,7 +58,8 @@ cdef extern from "dataset.hpp":
 
         void load_sequence_bias( char* ref_fn, char* bias_fn )
 
-        void fit_null_distr( c_interval_stack* train, double* p, double* r )
+        void fit_null_distr( c_interval_stack* train,
+                             double* p, double* r, double* a )
 
         size_t n_targets()
 
