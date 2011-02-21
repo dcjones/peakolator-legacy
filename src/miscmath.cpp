@@ -120,12 +120,25 @@ double lpnbinom( unsigned int q, double r, double p, bool lower_tail )
 
 
 
-double ddnbsum( unsigned int x, double r, double p, unsigned int d )
+double lddnbinom( unsigned int x, double r, double p )
 {
-    if( x < d ) return 0.0;
+    if( x == 0 ) return GSL_NEGINF;
+    return lbinco( (double)x + r - 1, x )
+         + x * log(p)
+         - logsubexp( -r * log(1.0 - p), 0.0 );
+}
+
+
+
+double ddnbsum( unsigned int x_, double r, double p, unsigned int d_ )
+{
+    if( x_ < d_ ) return 0.0;
 
     int sgn = -1;
     double a, ans = 0.0;
+
+    double x = (double)x_;
+    double d = (double)d_;
 
     double u1 = pow( p, x );
     double u2 = pow( pow( 1.0 - p, -r ) - 1.0, d );
@@ -135,7 +148,7 @@ double ddnbsum( unsigned int x, double r, double p, unsigned int d )
         sgn *= -1;
 
         a =  binco( d, k );
-        a *= binco( x + k * r - 1, x );
+        a *= binco( (double)x + k * r - 1, x );
         a *= u1;
         a /= u2;
 
@@ -148,19 +161,22 @@ double ddnbsum( unsigned int x, double r, double p, unsigned int d )
 
 
 
-double pdnbsum( unsigned int x, double r, double p,
-                unsigned int d, bool lower_tail )
+double pdnbsum( unsigned int x_, double r, double p,
+                unsigned int d_, bool lower_tail )
 {
-    if( x < d ) return 0.0;
+    if( x_ < d_ ) return 0.0;
+
+    double x = (double)x_;
+    double d = (double)d_;
 
     int sgn = -1;
     double a, ans = 0.0;
 
 
-    unsigned int k;
+    double k;
     for( k = d; k > 0; k-- ) {
         sgn *= -1;
-        a = binco( d,k );
+        a = binco( d, k );
         a *= pow( 1.0 - p, - (double)k * r );
         a *= gsl_sf_beta_inc( x + 1.0, k * r, p );
 
@@ -176,9 +192,12 @@ double pdnbsum( unsigned int x, double r, double p,
 }
 
 
-double lddnbsum( unsigned int x, double r, double p, size_t d )
+double lddnbsum( unsigned int x_, double r, double p, unsigned int d_ )
 {
-    if( x < d ) return GSL_NEGINF;
+    if( x_ < d_ ) return GSL_NEGINF;
+
+    double x = (double)x_;
+    double d = (double)d_;
 
     double lp = log( p );
     double lq = log( 1.0 - p );
@@ -186,7 +205,7 @@ double lddnbsum( unsigned int x, double r, double p, size_t d )
     double a, ans = GSL_NAN;
     int sgn = -1;
 
-    size_t k;
+    double k;
     for( k = d; k > 0; k-- ) {
         sgn *= -1;
 
@@ -204,10 +223,13 @@ double lddnbsum( unsigned int x, double r, double p, size_t d )
 }
 
 
-double lpdnbsum( unsigned int x, double r, double p,
-                 unsigned int d, bool lower_tail )
+double lpdnbsum( unsigned int x_, double r, double p,
+                 unsigned int d_, bool lower_tail )
 {
-    if( x < d ) return GSL_NEGINF;
+    if( x_ < d_ ) return GSL_NEGINF;
+
+    double x = (double)x_;
+    double d = (double)d_;
 
     double lp = log( p );
     double lq = log( 1.0 - p );
@@ -215,7 +237,7 @@ double lpdnbsum( unsigned int x, double r, double p,
     double a, ans = GSL_NAN;
     int sgn = -1;
 
-    size_t k;
+    double k;
     for( k = d; k > 0; k-- ) {
         sgn *= -1;
 
@@ -238,8 +260,8 @@ double lpdnbsum( unsigned int x, double r, double p,
 
 double ldzinb( unsigned int x, double r, double p, double a )
 {
-    if( x == 0.0 ) return logaddexp( log(a), log(1.0 - a) + ldnbinom( x, r, p )  );
-    else           return log(1.0 - a) + ldnbinom( x, r, p );
+    if( x == 0.0 ) return log(a);
+    else           return log(1.0 - a) + lddnbinom( x, r, p );
 }
 
 

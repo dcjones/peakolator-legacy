@@ -39,6 +39,11 @@ double binco( double n, double k );
 double lbinco( double n, double k );
 
 
+/* The log density function of the decapitated negative binomial distribution.
+ */
+double lddnbinom( unsigned x, double r, double p );
+
+
 /* The density function of the the distribution over the sum of d i.i.d.
  * decapitated negative binomial variables. */
 double ddnbsum( unsigned int x, double r, double p, unsigned int d );

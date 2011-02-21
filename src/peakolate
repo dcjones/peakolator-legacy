@@ -440,6 +440,14 @@ def get_transcript_extents( rows ):
 
 
 
+def complement_rows( rows, chrom_sizes ):
+    # TODO
+    # 1. make intervals from rows
+    # 2. make intervals from chrom_sizes
+    # 3. subtract
+    pass
+
+
 def get_interval_gaps( intervals, chrom_sizes, stranded ):
     ''' get all the intervals, not covered by the provided intervals '''
 
@@ -697,6 +705,10 @@ def main():
                      default = [],
                      help = 'regions in BED or GTF format to ignore in the scan')
 
+    ap.add_argument( '-I', '--include', action = 'append', metavar = 'in.bed/gtf',
+                     default = [],
+                     help = 'consider only the regions contained in the BED or GTF files' )
+
     ap.add_argument( '-v', '--verbose', action = 'store_true', default = False,
                      help = 'print a lot of output' )
 
@@ -760,8 +772,10 @@ def main():
         data.load_sequence_bias( args.ref_fn, args.bias_fn )
 
 
-
-    blacklist = get_transcript_extents( reduce( operator.add,
+    if len(args.include) > 0:
+        blacklist = complement_intervals( map( parse_gtf_bed, args.include ) )
+    else:
+        blacklist = get_transcript_extents( reduce( operator.add,
                                                 map( parse_gtf_bed, args.ignore),
                                                 [] ) )
     predictions = []
