@@ -30,19 +30,19 @@ double lpbinom( unsigned int x, double p, unsigned int n, bool lower_tail = true
 
 
 /* The negative binomial log density function */
-//double ldnbinom( unsigned int x, double r, double p );
+double ldnbinom( unsigned int x, double r, double p );
 
 /* The negative binomial log comulative distribution function. */
-//double lpnbinom( unsigned int q, double r, double p, bool lower_tail = false );
+double lpnbinom( unsigned int q, double r, double p, bool lower_tail = false );
 
 
 
 /* The truncated negative binomial log density function */
-double ldnbinom( unsigned int x, double r, double p,
+double ldtnbinom( unsigned int x, double r, double p,
                  unsigned int k );
 
 /* The truncated negative binomial log distribution function. */
-double lpnbinom( unsigned int q, double r, double p,
+double lptnbinom( unsigned int q, double r, double p,
                  unsigned int k, bool lower_tail = false );
 
 

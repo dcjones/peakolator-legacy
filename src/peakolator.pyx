@@ -378,5 +378,6 @@ def lpdnbsum( x, r, p, d ):
 def lddnbsum( x, r, p, d ):
     return c_lddnbsum( x, r, p, d )
 
-
+def lpnbinom( q, r, p ):
+    return c_lpnbinom( q, r, p, False )
 

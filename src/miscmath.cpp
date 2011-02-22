@@ -128,6 +128,18 @@ double lpnbinom( unsigned int q, double r, double p, bool lower_tail )
 
 
 
+double ldtnbinom( unsigned int x, double r, double p, unsigned int k )
+{
+    return ldnbinom( x, r, p ) - lpnbinom( k, r, p, false );
+}
+
+double lptnbinom( unsigned int x, double r, double p, unsigned int k, bool lower_tail )
+{
+    return lpnbinom( x, r, p, lower_tail ) - lpnbinom( k, r, p, false );
+}
+
+
+
 double lddnbinom( unsigned int x_, double r, double p )
 {
     double x = (double)x_;

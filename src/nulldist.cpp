@@ -38,7 +38,7 @@ void nulldist::build( double r, double p, double a, int m, int n )
     int i,j;
     for( i = 0; i < m; i++ ) {
         for( j = 0; j < n; j++ ) {
-            A[i*n+j-1] = lpdnbsum( j+1, r, p, i+1 );
+            A[i*n+j-1] = lptnbinom( j+1, i+1, p, i );
         }
     }
 }
@@ -100,7 +100,7 @@ double nulldist::QX( rcount x, unsigned int z, unsigned int d )
     double ans;
 
     if( A == NULL || x >= (rcount) n || d - z >= m ) {
-        ans = lpdnbsum( x, r, p, d - z );
+        ans = lptnbinom( x, r*(double)d, p, d - z - 1 );
     }
     else {
         ans = A[ (d-z-1)*n + (x-1) ];

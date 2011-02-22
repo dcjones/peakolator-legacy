@@ -40,6 +40,9 @@ cdef extern from "miscmath.hpp":
     double c_lddnbsum "lddnbsum" ( unsigned int x_, double r, double p,
                                    unsigned int d_ )
 
+    double c_lpnbinom "lpnbinom" ( unsigned int q, double r, double p,
+                                   bint lower_tail )
+
 cdef extern from "annotations.hpp":
     ctypedef struct rows:
         pass
