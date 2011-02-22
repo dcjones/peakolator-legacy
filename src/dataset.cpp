@@ -213,7 +213,11 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p, double* 
 
     const double TINY_VAL = 1e-10;
 
-    const double lower[]     = { 1.0, TINY_VAL };
+    /* NOTE: I'm using fairly tight constraints.
+     *       If very small values of r or p are fit, then it is difficult to
+     *       generate random variates using rejection sampling, otherwise.
+     */
+    const double lower[]     = { 1.0, 0.1 };
     const double upper[]     = { HUGE_VAL, 1.0 - TINY_VAL };
     const double step_size[] = { 0.5, 0.1 };
     
