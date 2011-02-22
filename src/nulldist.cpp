@@ -38,7 +38,7 @@ void nulldist::build( double r, double p, double a, int m, int n )
     int i,j;
     for( i = 0; i < m; i++ ) {
         for( j = 0; j < n; j++ ) {
-            A[i*n+j-1] = lptnbinom( j+1, i+1, p, i );
+            A[i*n+j] = lptnbinom( j+1, i+1, p, i );
         }
     }
 }
