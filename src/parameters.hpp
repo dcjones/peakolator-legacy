@@ -22,8 +22,8 @@ class parameters
         /* adjusted p-value at which we consider a sub-interval significant */
         double alpha;
 
-        /* negative binomial parameters */
-        double r,p;
+        /* zero-inflated negative binomial parameters */
+        double r,p,a;
 
         /* Hard limits on the duration of segments. */
         /* IMPORTANT: for technical reasons, d_min > 2, must be true.

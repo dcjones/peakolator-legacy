@@ -30,8 +30,9 @@ class scanner
 
 
     private:
-        /* raw p-value (score) for subinterval of duration d with read count x */
-        double QX( double r, rcount x );
+        /* raw p-value (score) for subinterval of duration d with read count x
+         * and z positions with a count of zero. */
+        double QX( rcount x, unsigned int z, unsigned int d );
 
         /* push a new bound onto the priority queue if it is valid
          * (i.e. duration within [d_min,d_max] and score lower bound does not rule it out.) */

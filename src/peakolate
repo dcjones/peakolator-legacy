@@ -442,9 +442,21 @@ def get_transcript_extents( rows ):
 
 def complement_rows( rows, chrom_sizes ):
     # TODO
+    # 0. merge changes made in the backscan branch
     # 1. make intervals from rows
     # 2. make intervals from chrom_sizes
     # 3. subtract
+
+    #us = [ interval( row.seqname, row.start, row.end, row.strand )
+                #for row in rows ]
+
+    #vs = []
+    #vs.extend( interval( seqname, 0, chrom_sizes[seqname]-1, 0 )
+                #for seqname in chrom_sizes )
+    #vs.extend( interval( seqname, 0, chrom_sizes[seqname]-1, 1 )
+                #for seqname in chrom_sizes )
+
+
     pass
 
 
@@ -621,8 +633,7 @@ def scan( args, data, chrom_sizes, regions ):
             training_intervals.append(
                     peakolator.interval( seqname, start, end, strand ) )
 
-    # TODO: do something with a
-    params.r, params.p, a = data.fit_null_distr( training_intervals )
+    params.r, params.p, params.a = data.fit_null_distr( training_intervals )
 
 
 

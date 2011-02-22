@@ -18,9 +18,10 @@ class subinterval
 
         subinterval();
         subinterval( pos start, pos end,
-                  double score = 0.0,
-                  rcount count = 0,
-                  double rate  = 1.0 );
+                  double       score = 0.0,
+                  rcount       count = 0,
+                  unsigned int zeros = 0,
+                  double       rate  = 1.0 );
 
         subinterval( const subinterval& y );
 
@@ -29,17 +30,19 @@ class subinterval
         bool operator>( const subinterval& y ) const;
 
         void set( pos start, pos end,
-                  double score = 1.0,
-                  rcount count = 0,
-                  double rate  = 1.0 );
+                  double       score = 1.0,
+                  rcount       count = 0,
+                  unsigned int zeros = 0,
+                  double       rate  = 1.0 );
 
         pos  length() const;
 
         pos start;
         pos end;
-        double     score;
-        rcount     count;
-        double     rate;
+        double       score;
+        rcount       count;
+        unsigned int zeros;
+        double       rate;
 };
 
 
@@ -67,28 +70,32 @@ class subinterval_bound
         subinterval_bound();
 
         subinterval_bound( pos min, pos max,
-                           double rate = 1.0,
-                           rcount count = 0,
-                           double score = 0.0 );
+                           double       rate  = 1.0,
+                           rcount       count = 0,
+                           unsigned int zeros = 0,
+                           double       score = 0.0 );
 
         subinterval_bound( pos I_min, pos I_max, pos J_min, pos J_max,
-                           double rate = 1.0,
-                           rcount count = 0,
-                           double score = 0.0 );
+                           double       rate  = 1.0,
+                           rcount       count = 0,
+                           unsigned int zeros = 0,
+                           double       score = 0.0 );
 
         subinterval_bound( const subinterval_bound& );
 
         void operator=( const subinterval_bound& );
 
         void set( pos min, pos max,
-                  double rate = 1.0,
-                  rcount count = 0,
-                  double score = 0.0 );
+                  double       rate  = 1.0,
+                  rcount       count = 0,
+                  unsigned int zeros = 0,
+                  double       score = 0.0 );
 
         void set( pos I_min, pos I_max, pos J_min, pos J_max,
-                  double rate = 1.0,
-                  rcount count = 0,
-                  double score = 0.0 );
+                  double       rate  = 1.0,
+                  rcount       count = 0,
+                  unsigned int zeros = 0,
+                  double       score = 0.0 );
 
         bool   disjoint_bounds()   const;
         bool   equal_bounds()      const;
@@ -101,9 +108,10 @@ class subinterval_bound
         pos I_max;
         pos J_min;
         pos J_max;
-        double     rate;
-        rcount     count;
-        double     score;
+        double       rate;
+        rcount       count;
+        unsigned int zeros;
+        double       score;
 
     private:
         void check() const;

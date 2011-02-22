@@ -33,7 +33,12 @@ cdef extern from "logger.h":
     void log_verbosity( int )
 
 
+cdef extern from "miscmath.hpp":
+    double c_lpdnbsum "lpdnbsum" ( unsigned int x_, double r, double p,
+                                   unsigned int d_, bint lower_tail )
 
+    double c_lddnbsum "lddnbsum" ( unsigned int x_, double r, double p,
+                                   unsigned int d_ )
 
 cdef extern from "annotations.hpp":
     ctypedef struct rows:
@@ -97,7 +102,7 @@ cdef extern from "parameters.hpp":
         void rebuild_lookup( int m, int n )
         void build_padj()
         double alpha
-        double r, p
+        double r, p, a
         pos d_min
         pos d_max
         pass

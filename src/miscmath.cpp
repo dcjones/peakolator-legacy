@@ -100,6 +100,14 @@ double ldbinom( unsigned int x, double p, unsigned int n )
 }
 
 
+double lpbinom( unsigned int x, double p, unsigned int n, bool lower_tail )
+{
+    if( lower_tail ) return log_beta_inc( n - x, x + 1, 1.0 - p );
+    else             return log_beta_inc( x + 1, n - x, p );
+}
+
+
+
 double ldnbinom( unsigned int x_, double r, double p )
 {
     double x = (double)x_;
@@ -120,12 +128,15 @@ double lpnbinom( unsigned int q, double r, double p, bool lower_tail )
 
 
 
-double lddnbinom( unsigned int x, double r, double p )
+double lddnbinom( unsigned int x_, double r, double p )
 {
+    double x = (double)x_;
     if( x == 0 ) return GSL_NEGINF;
-    return lbinco( (double)x + r - 1, x )
-         + x * log(p)
-         - logsubexp( -r * log(1.0 - p), 0.0 );
+    double u1 = lbinco( x + r - 1.0, x );
+    double u2 = x * log(p);
+    double u3 = logsubexp( -r * log(1.0 - p), 0.0 );
+
+    return u1 + u2 - u3;
 }
 
 
@@ -203,21 +214,33 @@ double lddnbsum( unsigned int x_, double r, double p, unsigned int d_ )
     double lq = log( 1.0 - p );
 
     double a, ans = GSL_NAN;
+    int anssgn = 1;
+    //double u = GSL_NAN, v = GSL_NAN;
     int sgn = -1;
 
     double k;
-    for( k = d; k > 0; k-- ) {
+    //for( k = d; k > 0; k-- ) {
+    for( k = 1; k <= d; k++ ) {
         sgn *= -1;
 
         a =  lbinco( d, k );
         a += lbinco( x + k * r - 1.0, x );
-        a += x * lp;
-        a -= d * logsubexp( -r * lq, 0.0 );
 
-        if( k == d )         ans = a;
-        else if( sgn < 0.0 ) ans = logsubexp( ans, a );
-        else                 ans = logaddexp( ans, a );
+        if( gsl_isnan( ans ) ) ans = a;
+        else if( sgn == anssgn ) {
+            ans = logaddexp( ans, a );
+        }
+        else {
+            if( ans < a ) {
+                ans = logsubexp( a, ans );
+                anssgn *= -1;
+            }
+            else ans = logsubexp( ans, a );
+        }
     }
+
+    ans += x * lp;
+    ans -= d * logsubexp( -r * lq, 0.0 );
 
     return ans;
 }
@@ -231,10 +254,48 @@ double lpdnbsum( unsigned int x_, double r, double p,
     double x = (double)x_;
     double d = (double)d_;
 
+    double eps = 1e-4;
+    double ans, ans0;
+
+    if( lower_tail ) {
+        ans0 = 0.0;
+        ans = lddnbsum( x, r, p, d );
+
+        while( x > d && abs(ans - ans0) > eps ) {
+            x--;
+            ans0 = ans;
+            ans = logaddexp( ans, lddnbsum( x, r, p, d ) );
+        }
+    }
+    else {
+        x++;
+        ans0 = 0.0;
+        ans = lddnbsum( x, r, p, d );
+
+        while( abs(ans - ans0) > eps ) {
+            x++;
+            ans0 = ans;
+            ans = logaddexp( ans, lddnbsum( x, r, p, d ) );
+        }
+    }
+
+    return ans;
+}
+
+#if 0
+double lpdnbsum( unsigned int x_, double r, double p,
+                 unsigned int d_, bool lower_tail )
+{
+    if( x_ < d_ ) return GSL_NEGINF;
+
+    double x = (double)x_;
+    double d = (double)d_;
+
     double lp = log( p );
     double lq = log( 1.0 - p );
 
     double a, ans = GSL_NAN;
+    double u = GSL_NAN, v = GSL_NAN;
     int sgn = -1;
 
     double k;
@@ -245,10 +306,19 @@ double lpdnbsum( unsigned int x_, double r, double p,
         a += -k * r * lq;
         a += log_beta_inc( x + 1.0, k * r, p );
 
-        if( k == d )       ans = a;
-        else if( sgn < 0 ) ans = logsubexp( ans, a );
-        else               ans = logaddexp( ans, a );
+
+        if( sgn > 0.0 ) {
+            if( gsl_isnan( u ) ) u = a;
+            else                 u = logaddexp( u, a );
+        }
+        else {
+            if( gsl_isnan( v ) ) v = a;
+            else                 v = logaddexp( v, a );
+        }
     }
+
+    if( gsl_isnan( v ) ) ans = u;
+    else                 ans = logsubexp( u, v );
 
     ans -= d * logsubexp( -r * lq, 0.0 );
 
@@ -256,7 +326,7 @@ double lpdnbsum( unsigned int x_, double r, double p,
 
     return ans;
 }
-
+#endif
 
 double ldzinb( unsigned int x, double r, double p, double a )
 {

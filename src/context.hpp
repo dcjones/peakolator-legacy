@@ -38,6 +38,14 @@ class context
         double rate( pos i, pos j ) const;
         double rate( pos i, pos j, int strand ) const;
 
+        void count_zeros( rcount* c, unsigned int* z );
+        void count_zeros( rcount* c, unsigned int* z, pos i );
+        void count_zeros( rcount* c, unsigned int* z, pos i, pos j );
+        void count_zeros( rcount* c, unsigned int* z, pos i, pos j, int strand );
+
+        unsigned int min_zeros( const subinterval_bound& B, pos d_min ) const;
+        pos min_duration( const subinterval_bound& B, pos d_min ) const;
+
         double min_rate( const subinterval_bound& B, pos d_min ) const;
         double min_rate( const subinterval_bound& B, pos d_min, int strand ) const;
 

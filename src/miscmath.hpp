@@ -25,11 +25,26 @@ double log_beta_inc( double a, double b, double x );
 /* The binomial log density function */
 double ldbinom( unsigned int x, double p, unsigned int n );
 
+/* The binomial log distribution function */
+double lpbinom( unsigned int x, double p, unsigned int n, bool lower_tail = true );
+
+
 /* The negative binomial log density function */
-double ldnbinom( unsigned int x, double r, double p );
+//double ldnbinom( unsigned int x, double r, double p );
 
 /* The negative binomial log comulative distribution function. */
-double lpnbinom( unsigned int q, double r, double p, bool lower_tail = false );
+//double lpnbinom( unsigned int q, double r, double p, bool lower_tail = false );
+
+
+
+/* The truncated negative binomial log density function */
+double ldnbinom( unsigned int x, double r, double p,
+                 unsigned int k );
+
+/* The truncated negative binomial log distribution function. */
+double lpnbinom( unsigned int q, double r, double p,
+                 unsigned int k, bool lower_tail = false );
+
 
 
 /* binomial coefficient */
@@ -64,15 +79,14 @@ double lpdnbsum( unsigned int x, double r, double p,
                  unsigned int d, bool lower_tail = false );
 
 
-/* log density of the zero inflated negative binomial distribution
- * Where f( x; r, p ) is the negative binomial density function, then density
+/* log density of the zero inflated negative binomial distribution Where f( x;
+ * r, p ) is the decapitated negative binomial density function, then density
  * function for the zinb distribution is,
  *
- *  g( x; r, p, a ) = a + (1.0 - a) * f( 0; r, p )    if x = 0
- *                    (1.0 - a) * f( x; r, p )        otherwise
+ *  g( x; r, p, a ) = a                           if x = 0
+ *                    (1.0 - a) * f( x; r, p )    otherwise
  */
 double ldzinb( size_t x, double r, double p, double a );
-
 
 
 

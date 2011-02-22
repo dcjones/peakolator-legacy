@@ -213,7 +213,7 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p, double* 
 
     const double TINY_VAL = 1e-10;
 
-    const double lower[]     = { TINY_VAL, TINY_VAL };
+    const double lower[]     = { 1.0, TINY_VAL };
     const double upper[]     = { HUGE_VAL, 1.0 - TINY_VAL };
     const double step_size[] = { 0.5, 0.1 };
     
@@ -236,6 +236,9 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p, double* 
     rp[0] = sq( ks_mean ) / (ks_var - ks_mean);
     rp[1] = rp[0] / (rp[0] + ks_mean);
 
+    rp[0] = min( upper[0], max( lower[0], rp[0] ) );
+    rp[1] = min( upper[1], max( lower[1], rp[1] ) );
+
     log_puts( LOG_MSG, "optimizing ... " );
     log_indent();
 
@@ -248,7 +251,7 @@ void dataset::fit_null_distr( interval_stack* is, double* r, double* p, double* 
 
     *a = 0;
     for( j = 1; j <= max_k; j++ ) *a += ksh->bin[j];
-    *a /= *a + (double)ksh->bin[0];
+    *a = (double)ksh->bin[0] / (*a + (double)ksh->bin[0]);
 
     log_unindent();
     log_printf( LOG_MSG, "done. (r = %0.4e, p = %0.4e, a = %0.4e\n", *r, *p, *a );

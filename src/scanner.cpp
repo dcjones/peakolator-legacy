@@ -28,7 +28,9 @@ scanner::scanner(
     this->ctx = ctx;
     this->params  = params;
 
-    if( !this->params->dist.ready() ) params->dist.build( params->r, params->p );
+    if( !this->params->dist.ready() ) {
+        params->dist.build( params->r, params->p, params->a );
+    }
 
 }
 
@@ -39,9 +41,9 @@ scanner::~scanner()
 
 
 
-double scanner::QX( double r, rcount x )
+double scanner::QX( rcount x, unsigned int z, unsigned int d )
 {
-    return params->dist.QX( r, x );
+    return params->dist.QX( x, z, d );
 }
 
 
@@ -123,9 +125,10 @@ void scanner::conditional_push_copy(
         x.min_length() <= params->d_max &&
         x.max_length() >= params->d_min )
     {
-        x.score = QX(
-                     ctx->min_rate( x, params->d_min ),
-                     x.count );
+        x.score = QX( x.count,
+                      ctx->min_zeros( x, params->d_min ),
+                      ctx->min_duration( x, params->d_min ) );
+
         if( x.score < score_max ) q.push( new subinterval_bound(x) );
     }
 }
@@ -149,6 +152,7 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
     /* temporary values for count and rate, resp. */
     double r;
     rcount c;
+    unsigned int z;
 
     /* least likely interval discovered so far */
     /* (initialized to pval = alpha so we don't bother looking at anything higher) */
@@ -171,13 +175,19 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
     pos mid1, mid2;
     double r1, r2;
     rcount c1, c2;
+    unsigned int z1, z2;
+
 
 
     /* number of possible subintervals in B */
     size_t m;
 
-    B->set( i, j, ctx->rate(i,j), ctx->count(i,j) );
-    B->score = QX( ctx->min_rate( *B, params->d_min ), B->count );
+
+    ctx->count_zeros( &c, &z, i, j );
+    B->set( i, j, ctx->rate(i,j), c, z );
+    B->score = QX( B->count,
+                   ctx->min_zeros( *B, params->d_min ),
+                   ctx->min_duration( *B, params->d_min ) );
 
     Q.push( B );
 
@@ -195,7 +205,9 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 
         /* can we use B as a new bound? */
         if( B->max_length() <= params->d_max ) {
-            S.score = QX( B->rate, B->count );
+        
+            S.score = QX( B->count, B->zeros, B->max_length() );
+
             if( S.score < S_min.score ) {
                 S_min.start = B->I_min;
                 S_min.end   = B->J_max;
@@ -222,15 +234,20 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 
             /* set proper rate/count for S */
             S.count = B->count;
+            S.zeros = B->zeros;
             S.rate  = B->rate;
 
             if( S.start > B->I_min ) {
-                S.count -= ctx->count( B->I_min, S.start-1 );
+                ctx->count_zeros( &c, &z, B->I_min, S.start-1 );
+                S.count -= c;
+                S.zeros -= z;
                 S.rate  -= ctx->rate ( B->I_min, S.start-1 );
             }
 
             if( S.end < B->J_max ) {
-                S.count -= ctx->count( S.end+1, B->J_max );
+                ctx->count_zeros( &c, &z, S.end+1, B->J_max );
+                S.count -= c;
+                S.zeros -= z;
                 S.rate  -= ctx->rate ( S.end+1, B->J_max );
             }
 
@@ -247,6 +264,7 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
                  * */
                 if( S.start + params->d_min - 1 < B->J_max &&
                     ctx->count(S.start) == 0 ) {
+                    S.zeros -= 1;
                     S.rate -= ctx->rate(S.start);
                     S.start++;
                     continue;
@@ -256,17 +274,18 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
  
                 /* walk the end backwards */
                 while( S.end >= B->J_min && S.length() >= params->d_min ) {
-                    c = ctx->count( S.end );
+                    ctx->count_zeros( &c, &z, S.end );
                     r = ctx->rate ( S.end );
 
                     /* efficiency trick, as above, same conditions apply */
                     if( S.length() > params->d_min && c == 0 ) {
                         S.end--;
-                        S.rate -= r;
+                        S.rate  -= r;
+                        S.zeros -= z;
                         continue;
                     }
 
-                    S.score = QX( S.rate, S.count );
+                    S.score = QX( S.count, S.zeros, S.length() );
 
                     if( S.score < S_min.score ) {
                         S_min = S;
@@ -277,18 +296,23 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
 
                     S.end--;
                     S.count -= c;
+                    S.zeros -= z;
                     S.rate  -= r;
                 }
 
                 /* reset and move S.start forward */
                 S = S_prev;
-                S.count -= ctx->count(S.start);
+                ctx->count_zeros( &c, &z, S.start );
+                S.count -= c;
+                S.zeros -= z;
                 S.rate  -= ctx->rate (S.start);
                 S.start++;
 
                 if( S.end < B->J_max ) {
                     S.end++;
-                    S.count += ctx->count(S.end);
+                    ctx->count_zeros( &c, &z, S.end );
+                    S.count += c;
+                    S.zeros += z;
                     S.rate  += ctx->rate (S.end);
                 }
             }
@@ -300,21 +324,21 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
         else if( B->equal_bounds() ) {
             mid1 = B->I_min + (B->I_max - B->I_min) / 2;
 
-            c1 = ctx->count( B->I_min, mid1 );
-            r1 = ctx->rate ( B->I_min, mid1 );
+            ctx->count_zeros( &c1, &z1, B->I_min, mid1 );
+            r1 = ctx->rate( B->I_min, mid1 );
 
             /* Left: ####|---- */
-            C.set( B->I_min, mid1, r1, c1 );
+            C.set( B->I_min, mid1, r1, c1, z1 );
             conditional_push_copy( Q, C, S_min.score );
 
 
             /* Right: ----|#### */
-            C.set( mid1+1, B->J_max, B->rate - r1, B->count - c1 );
+            C.set( mid1+1, B->J_max, B->rate - r1, B->count - c1, B->zeros - z1 );
             conditional_push_copy( Q, C, S_min.score );
 
 
             /* Center: ####|#### */
-            C.set( B->I_min, mid1, mid1+1, B->J_max, B->rate, B->count );
+            C.set( B->I_min, mid1, mid1+1, B->J_max, B->rate, B->count, B->zeros );
             conditional_push_copy( Q, C, S_min.score );
         }
 
@@ -326,32 +350,41 @@ subinterval scanner::least_likely_interval( pos i, pos j, double alpha )
             mid1 = B->I_min + (B->I_max - B->I_min) / 2;
             mid2 = B->J_min + (B->J_max - B->J_min) / 2;
 
-            c1 = ctx->count( B->I_min, mid1 );
+            ctx->count_zeros( &c1, &z1, B->I_min, mid1 );
             r1 = ctx->rate ( B->I_min, mid1 );
 
-            c2 = ctx->count( mid2, B->J_max );
+            ctx->count_zeros( &c2, &z2, mid2, B->J_min );
             r2 = ctx->rate ( mid2, B->J_max );
 
 
             /* ####----|----####  */ 
-            C.set( B->I_min, mid1, mid2, B->J_max, B->rate, B->count );
+            C.set( B->I_min, mid1, mid2, B->J_max, B->rate, B->count, B->zeros );
             conditional_push_copy( Q, C, S_min.score );
 
 
             /* ----####|####----  */ 
-            C.set( mid1+1, B->I_max, B->J_min, mid2-1, B->rate - r1 - r2, B->count - c1 - c2 );
+            C.set( mid1+1, B->I_max, B->J_min, mid2-1,
+                   B->rate - r1 - r2,
+                   B->count - c1 - c2,
+                   B->zeros - z1 - z2 );
             conditional_push_copy( Q, C, S_min.score );
 
 
             /* ####----|####----  */ 
             if( c1 > 0 || mid2 - mid1 - 1 < params->d_min  ) {
-                C.set( B->I_min, mid1, B->J_min, mid2-1, B->rate - r2, B->count - c2 );
+                C.set( B->I_min, mid1, B->J_min, mid2-1,
+                       B->rate - r2,
+                       B->count - c2,
+                       B->zeros - z2 );
                 conditional_push_copy( Q, C, S_min.score );
             }
 
             /* ----####|----####  */ 
             if( c2 > 0 || mid2 - mid1 - 1 < params->d_min ) {
-                C.set( mid1+1, B->I_max, mid2, B->J_max, B->rate - r1, B->count - c1 );
+                C.set( mid1+1, B->I_max, mid2, B->J_max,
+                       B->rate - r1,
+                       B->count - c1,
+                       B->zeros - z1 );
                 conditional_push_copy( Q, C, S_min.score );
             }
 

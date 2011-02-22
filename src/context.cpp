@@ -207,7 +207,7 @@ void context::set_noise( nulldist& dist, pos len )
     pos i;
     for( i = 0; i < len; i++ ) {
         rs[0][i] = 1.0;
-        xs[0][i] = dist.rand( 1.0 );
+        xs[0][i] = dist.rand();
     }
 }
 
@@ -290,6 +290,88 @@ double context::rate( pos i, pos j, int strand ) const
     }
 
     return total;
+}
+
+void context::count_zeros( rcount* c, unsigned int* z )
+{
+    count_zeros( c, z, 0, length()-1 );
+}
+
+void context::count_zeros( rcount* c, unsigned int* z, pos i )
+{
+    rcount c_i;
+    *c = 0;
+    *z = 0;
+
+    if( strand == -1 ) {
+        c_i = xs[0] ? xs[0][i] : 0;
+        if( c_i == 0 ) *z += 1;
+        else           *c += c_i;
+
+        c_i = xs[1] ? xs[1][i] : 0;
+        if( c_i == 0 ) *z += 1;
+        else           *c += c_i;
+    }
+    else {
+        c_i = xs[strand] ? xs[strand][i] : 0;
+        if( c_i == 0 ) *z += 1;
+        else           *c += c_i;
+    }
+}
+
+void context::count_zeros( rcount* c, unsigned int* z,
+                           pos i, pos j )
+{
+    count_zeros( c, z, i, j, strand );
+}
+
+void context::count_zeros( rcount* c, unsigned int* z,
+                           pos i, pos j, int strand )
+{
+    rcount c_i;
+    *c = 0;
+    *z = 0;
+
+    if( strand == -1 ) {
+        while( i <= j ) {
+            c_i = xs[0] ? xs[0][i] : 0;
+            if( c_i == 0 ) *z += 1;
+            else           *c += c_i;
+
+            c_i = xs[1] ? xs[1][i] : 0;
+            if( c_i == 0 ) *z += 1;
+            else           *c += c_i;
+            i++;
+        }
+    }
+    else {
+        while( i <= j ) {
+            c_i = xs[strand] ? xs[strand][i] : 0;
+            if( c_i == 0 ) *z += 1;
+            else           *c += c_i;
+            i++;
+        }
+    }
+}
+
+
+unsigned int context::min_zeros( const subinterval_bound& B, pos d_min ) const
+{
+    unsigned int mind = (unsigned int)min_duration( B, d_min );
+    unsigned int maxd = (unsigned int)B.max_length();
+
+    if( B.zeros <= maxd - mind ) return 0;
+    else                         return B.zeros - (maxd - mind);
+}
+
+pos context::min_duration( const subinterval_bound& B, pos d_min ) const
+{
+    if( B.disjoint_bounds() ) {
+        return max( B.J_min - B.I_max + 1, d_min );
+    }
+    else {
+        return min( B.J_max - B.I_min + 1, d_min );
+    }
 }
 
 

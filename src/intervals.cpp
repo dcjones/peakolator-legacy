@@ -18,29 +18,51 @@ bool subinterval_ordering::operator()( const subinterval& A, const subinterval& 
 
 subinterval::subinterval() : start(-1), end(-1), score(0.0), count(0), rate(0) {}
 
-subinterval::subinterval( pos start, pos end, double score, rcount count, double rate )
-    : start(start), end(end), score(score), count(count), rate(rate) {}
+subinterval::subinterval( pos start, pos end, double score,
+                          rcount count, unsigned int zeros, double rate )
+    : start(start)
+    , end(end)
+    , score(score)
+    , count(count)
+    , zeros(zeros)
+    , rate(rate)
+{}
 
 subinterval::subinterval( const subinterval& y )
-    : start(y.start), end(y.end), score(y.score), count(y.count), rate(y.rate) {}
+    : start(y.start)
+    , end(y.end)
+    , score(y.score)
+    , count(y.count)
+    , zeros(y.zeros)
+    , rate(y.rate) {}
 
 void subinterval::operator=( const subinterval& y ) { 
     start  = y.start;
     end    = y.end;
     score  = y.score;
     count  = y.count;
+    zeros  = y.zeros;
     rate   = y.rate;
 }
 
-bool subinterval::operator< ( const subinterval& y ) const { return score < y.score; }
-bool subinterval::operator> ( const subinterval& y ) const { return score > y.score; }
+bool subinterval::operator< ( const subinterval& y ) const
+{
+    return score < y.score;
+}
+
+bool subinterval::operator> ( const subinterval& y ) const
+{
+    return score > y.score;
+}
 
 
-void subinterval::set( pos start, pos end, double score, rcount count, double rate ) {
+void subinterval::set( pos start, pos end, double score,
+                       rcount count, unsigned int zeros, double rate ) {
     this->start  = start;
     this->end    = end;
     this->score  = score;
     this->count  = count;
+    this->zeros  = zeros;
     this->rate   = rate;
 }
 
@@ -70,32 +92,33 @@ subinterval_bound::subinterval_bound()
     , J_max(0)
     , rate(1.0)
     , count(0)
+    , zeros(0)
     , score(0.0)
 {
 }
 
 
 subinterval_bound::subinterval_bound( pos min, pos max,
-                                      double rate,
-                                      rcount count,
-                                      double score )
+                                      double       rate,
+                                      rcount       count,
+                                      unsigned int zeros,
+                                      double       score )
     : I_min(min), I_max(max)
     , J_min(min), J_max(max)
-    , rate(rate), count(count)
-    , score(score)
+    , rate(rate), count(count), zeros(zeros), score(score)
 {
     check();
 }
 
 subinterval_bound::subinterval_bound( pos I_min, pos I_max,
                                       pos J_min, pos J_max,
-                                      double rate,
-                                      rcount count,
-                                      double score )
+                                      double       rate,
+                                      rcount       count,
+                                      unsigned int zeros,
+                                      double       score )
     : I_min(I_min), I_max(I_max)
     , J_min(J_min), J_max(J_max)
-    , rate(rate), count(count)
-    , score(score)
+    , rate(rate), count(count), zeros(zeros), score(score)
 {
     check();
 }
@@ -103,8 +126,7 @@ subinterval_bound::subinterval_bound( pos I_min, pos I_max,
 subinterval_bound::subinterval_bound( const subinterval_bound& y )
     : I_min(y.I_min), I_max(y.I_max)
     , J_min(y.J_min), J_max(y.J_max)
-    , rate(y.rate), count(y.count)
-    , score(y.score)
+    , rate(y.rate), count(y.count), zeros(y.zeros), score(y.score)
 {
     check();
 }
@@ -118,15 +140,17 @@ void subinterval_bound::operator=( const subinterval_bound& y )
     this->J_max = y.J_max;
     this->rate  = y.rate;
     this->count = y.count;
+    this->zeros = y.zeros;
     this->score  = y.score;
     check();
 }
 
 
 void subinterval_bound::set( pos min, pos max,
-          double rate,
-          rcount count,
-          double score )
+          double       rate,
+          rcount       count,
+          unsigned int zeros,
+          double       score )
 {
     this->I_min  = min;
     this->I_max  = max;
@@ -134,15 +158,17 @@ void subinterval_bound::set( pos min, pos max,
     this->J_max  = max;
     this->rate   = rate;
     this->count  = count;
+    this->zeros  = zeros;
     this->score  = score;
     check();
 }
 
 
 void subinterval_bound::set( pos I_min, pos I_max, pos J_min, pos J_max,
-          double rate,
-          rcount count,
-          double score )
+          double       rate,
+          rcount       count,
+          unsigned int zeros,
+          double       score )
 {
     this->I_min  = I_min;
     this->I_max  = I_max;
@@ -150,6 +176,7 @@ void subinterval_bound::set( pos I_min, pos I_max, pos J_min, pos J_max,
     this->J_max  = J_max;
     this->rate   = rate;
     this->count  = count;
+    this->zeros  = zeros;
     this->score  = score;
     check();
 }

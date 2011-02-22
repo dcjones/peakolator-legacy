@@ -269,6 +269,10 @@ cdef class parameters:
         def __get__(self):   return self.cthis.p
         def __set__(self,p): self.cthis.p = p
 
+    property a:
+        def __get__(self):   return self.cthis.a
+        def __set__(self,a): self.cthis.a = a
+
     property d_min:
         def __get__(self):      return self.cthis.d_min
         def __set__(self,d_min): self.cthis.d_min = d_min
@@ -366,6 +370,13 @@ cdef class motif:
     def __dealloc__( self ):
         del_sequencing_bias( self.cthis )
 
+
+
+def lpdnbsum( x, r, p, d ):
+    return c_lpdnbsum( x, r, p, d, False )
+
+def lddnbsum( x, r, p, d ):
+    return c_lddnbsum( x, r, p, d )
 
 
 
