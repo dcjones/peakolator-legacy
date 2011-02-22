@@ -156,6 +156,7 @@ void subtable_rehash( struct subtable* T, size_t new_n )
         U.A[i].count = 0;
     }
 
+    U.m = 0;
     U.max_m = (size_t)(((double)primes[U.n]) * max_load);
 
 
