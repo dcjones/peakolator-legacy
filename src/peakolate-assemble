@@ -1,0 +1,470 @@
+#!/usr/bin/env python
+
+#
+#                                   _         _       _             
+#                  _ __   ___  __ _| | _____ | | __ _| |_ ___  _ __ 
+#                 | '_ \ / _ \/ _` | |/ / _ \| |/ _` | __/ _ \| '__|
+#                 | |_) |  __/ (_| |   < (_) | | (_| | || (_) | |   
+#                 | .__/ \___|\__,_|_|\_\___/|_|\__,_|\__\___/|_|   
+#                 |_|     
+#
+#                                      ~~~
+#
+#                       Assemble:
+#                       Given transcribed regions and splice junctions, assemble
+#                       possible isoforms.
+#
+#                                      ~~~
+#
+#                             Copyright (C) 2010 by
+#                    Daniel Jones <dcjones@cs.washington.edu>
+# 
+#
+#                       (See included README for licensing.)
+#
+
+
+# TODO:
+# 1. Some assembled genes have hundreds or thousands of transcripts. This must do a
+#    better job of weeding out bullshit splice junctions. Proposal: only include
+#    junctions where both ends overlap a transcribed region.
+#
+# 2. Handle unstranded reads.
+#
+
+
+import argparse
+import numpy as np
+from collections import namedtuple
+from sys         import stdout, stderr
+from bisect      import bisect_left
+
+
+bed_row    = namedtuple( 'bed_row', 'seqname strand start end' )
+
+intersection_fuzz = 30
+def intersects( a0, b0, a1, b1, fuzz = True ):
+    if fuzz:
+        return a0 <= b1 + intersection_fuzz and b0 >= a1 - intersection_fuzz
+    else:
+        return a0 <= b1 and b0 >= a1
+
+
+class gtf_row:
+    def __init__( self,
+                  seqname = None,
+                  strand  = None,
+                  start   = None,
+                  end     = None ):
+
+        self.seqname       = seqname
+        self.strand        = strand
+        self.start         = start
+        self.end           = end
+
+    def __repr__( self ):
+        return 'gtf_row( %s:%d-%d %d (%s) )' % \
+                    (self.seqname, self.start, self.end, self.strand )
+
+
+class clump:
+    def __init__( self ):
+        self.trans = []
+        self.juncs = []
+        self.end = None
+
+
+    def __repr__( self ):
+        return 'trans = %r\njuncs=%r\n' % (self.trans, self.juncs)
+
+
+    def overlaps( self, x ):
+
+        #stderr.write( '%r\n' % ((self.end, x),) )
+
+        #if x.seqname == 'chr14' and x.end == 62108000:
+            #stderr.write( 'HERE\n' )
+            #stderr.write( '%r\n' % (x,) )
+            #stderr.write( '%r\n' % (self.end,) )
+            #stderr.write( '%r\n' % self.juncs )
+            #stderr.write( '%r\n' % self.trans )
+            #if self.end is None: print False
+            #elif (self.end.seqname, self.end.strand) != (x.seqname, x.strand):
+                #print False
+            #else: 
+                #print x.start <= self.end.end + intersection_fuzz
+            #exit(1)
+
+        if self.end is None: return False
+        elif (self.end.seqname, self.end.strand) != (x.seqname, x.strand): return False
+        else: return x.start <= self.end.end + intersection_fuzz
+
+
+    def add( self, row, t ):
+        if t == 0:
+            self.trans.append(row)
+        else:
+            self.juncs.append(row)
+
+        u = row.end+2
+        if self.end is not None and self.end.end > u:
+            u = self.end.end
+
+        self.end = bed_row( seqname = row.seqname,
+                            strand  = row.strand,
+                            start   = u,
+                            end     = u )
+
+    def filter( self ):
+        '''
+        Remove all junctions where at least one end does not overlap a
+        transcribed region.
+        '''
+
+        # sorted by start coordinate
+        trans   = sorted( (row.start,row.end) for row in self.trans )
+        trans_r = sorted( x[::-1] for x in trans )
+
+        m = len(self.trans)
+
+        def trans_intersect( start, end ):
+            k = bisect_left( trans, (start,end) )
+            if k < m and intersects( start, end, trans[k][0], trans[k][1] ):
+                return trans[k]
+
+            k = bisect_left( trans_r, (end,start) )
+            if k < m and intersects( start, end, trans_r[k][1], trans_r[k][0] ):
+                return trans_r[k][::-1]
+
+            else:
+                return None
+
+        kept_juncs = []
+        for junc in self.juncs:
+            if trans_intersect( junc.start, junc.start ) and \
+               trans_intersect( junc.end, junc.end ):
+                kept_juncs.append( junc )
+
+        self.juncs = kept_juncs
+
+
+
+    def transcripts( self ):
+
+        # Plan:
+        # 1. Build a graph consisting of an edge (u,v)
+        #    iff v is u's nearest compatible sucessor or u is v's nearest
+        #    compatible predecessor.
+        #
+        # 2. Perform a depoth first traversal of this graph from each node with
+        #    in-degree 0.
+
+        self.filter()
+
+        if not self.juncs:
+            genes = []
+            for t in self.trans:
+                genes.append( [[ gtf_row( seqname = t.seqname,
+                                         strand  = t.strand,
+                                         start   = t.start,
+                                         end     = t.end ) ]] )
+            return genes
+
+        # sorted by start coordinate
+        trans = sorted( (row.start,row.end) for row in self.trans )
+        juncs = sorted( (row.start,row.end) for row in self.juncs )
+
+        # sorted by end coordinate
+        trans_r = sorted( x[::-1] for x in trans )
+        juncs_r = sorted( x[::-1] for x in juncs )
+
+        juncs_node = dict( (row,i) for (i,row) in enumerate(juncs) )
+
+        n = len(self.juncs)
+        m = len(self.trans)
+        G = np.zeros( (n,n), dtype=np.int32 ) # adjacency matrix
+
+        def trans_intersect( start, end ):
+            k = bisect_left( trans, (start,end) )
+            if k < m and intersects( start, end, trans[k][0], trans[k][1] ):
+                return trans[k]
+
+            k = bisect_left( trans_r, (end,start) )
+            if k < m and intersects( start, end, trans_r[k][1], trans_r[k][0] ):
+                return trans_r[k][::-1]
+
+            else:
+                return None
+
+
+        # Build connectivity graph
+        for u in juncs:
+            i = juncs_node[u]
+
+            # find u's nearest compatible successor
+            t = trans_intersect( u[1], u[1] )
+
+            for v in juncs[i+1:]:
+                if intersects( u[0], u[1], v[0], v[1], fuzz = False ):
+                    continue
+
+                if (t is not None and intersects( t[0], t[1], v[0], v[1] )) \
+                   or intersects( u[0], u[1], v[0], v[1] ):
+                       j = juncs_node[v]
+                       G[i,j] = 1
+                       break
+
+
+            # find u's nearest predesessor
+            t = trans_intersect( u[0], u[1] )
+
+            k = bisect_left( juncs_r, u[::-1] )
+            if k == 0: continue
+
+            for v in juncs_r[ k-1 : : -1 ]:
+                if intersects( u[0], u[1], v[1], v[0], fuzz = False ):
+                    continue
+
+                if (t is not None and intersects( t[0], t[1], v[1], v[0] )) \
+                   or intersects( u[0], u[1], v[1], v[0] ):
+                       j = juncs_node[v[::-1]]
+                       G[j,i] = 1
+                       break
+
+        # Traverse connectivity graph to get transcript paths
+        in_degree = np.sum( G, axis = 0 )
+        S = [ [i] for i in range(n) if in_degree[i] == 0 ]
+        P = []
+
+        k = 0
+        while S:
+
+            # XXX: hard cutoff on how many isoforms are produced
+            k += 1
+            if k > 1000: break
+
+            p = S.pop()
+            i = p[-1]
+
+            last = True
+            for j in xrange(n):
+                if G[i,j] != 0:
+                    last = False
+                    S.append( p + [j] )
+
+            if last:
+                P.append( p )
+
+
+        # Assemble into exons
+        TS = []
+        for p in P:
+
+            T = []
+            u = juncs[p[0]]
+            t = trans_intersect( u[0], u[0] )
+            if t: start = t[0]
+            else: start = u[0]-1
+
+            for i in p:
+                u = juncs[i]
+                T.append( gtf_row( seqname = self.juncs[0].seqname,
+                                   strand  = self.juncs[0].strand,
+                                   start   = start,
+                                   end     = u[0]-1 ) )
+                start = u[1]+1
+
+            u = juncs[p[-1]]
+            t = trans_intersect( u[1], u[1] )
+            if t: end = t[1]
+            else: end = start
+
+            T.append( gtf_row( seqname = self.juncs[0].seqname,
+                               strand  = self.juncs[0].strand,
+                               start   = start,
+                               end     = end ) )
+
+            TS.append( T )
+
+        return [TS]
+
+
+
+def parse_bed( fn ):
+    '''
+    Parse a bed file, exctracting just the rows needed.
+    '''
+
+    rows = set()
+    for line in open(fn):
+        row = line.strip('\n').split('\t')
+        if len(row) < 5: continue
+
+        seqname = row[0]
+        start   = int(row[1])
+        end     = int(row[2]) - 1
+        #name    = row[3]
+        strand  = row[5]
+        if strand == '+': strand = 0
+        elif strand == '-': strand = 1
+        else: strand = -1
+
+        rows.add( bed_row(
+                        seqname = seqname,
+                        start   = start,
+                        end     = end,
+                        #name    = name,
+                        strand  = strand ) )
+
+    return rows
+
+
+def flatten( rows ):
+    '''
+    Given a set of intervals, return a set of intervals with the same union but
+    disjoint.
+    '''
+
+    rows = sorted(rows)
+
+
+    i = 0
+    j = 1
+    while j < len(rows):
+        if rows[i] is None:
+            i += 1
+            continue
+
+        if rows[j] is None:
+            j += 1
+            continue
+
+        if i >= j:
+            j += 1
+            continue
+
+        if (rows[i].seqname, rows[i].strand) != (rows[j].seqname, rows[j].strand):
+            i += 1
+            j += 1
+            continue
+
+        if rows[i].end + intersection_fuzz >= rows[j].start:
+            rows[i] = bed_row( seqname = rows[i].seqname,
+                               strand  = rows[i].strand,
+                               start   = rows[i].start,
+                               end     = rows[j].end )
+            rows[j] = None
+
+        else:
+            i += 1
+
+    rows = set( row for row in rows if row is not None )
+
+    return rows
+
+
+
+
+def clumps( trans, juncs ):
+    '''
+    Identify clumps (closures) of overlapping splice junctions and transcribed
+    regions.
+    '''
+
+    trans = flatten( trans )
+
+    rows = sorted([ (row,0) for row in trans ] + [ (row,1) for row in juncs ])
+
+
+    cs = list() # clumps
+    c = None
+
+    for (row,t) in rows:
+        if c is None:
+            c = clump()
+            c.add( row, t )
+        elif c.overlaps( row ):
+            c.add( row, t )
+        else:
+            if len(c.trans) > 0: cs.append(c)
+            c = clump()
+            c.add( row, t )
+
+    if c is not None:
+        if len(c.trans) > 0: cs.append(c)
+
+    return cs
+
+
+def print_genes( gs ):
+
+    gtf_fmt = '{seqname}\tpeakolator_prediction\texon\t{start}\t{end}\t.\t' \
+              '{strand}\t.\tgene_id "{gene_id}"; ' \
+              'transcript_id "{transcript_id}"; exon_number "{exon_number}";\n'
+
+    j = 0
+    for (i,ts) in enumerate(gs):
+        gene_id = 'peakolator_gene_%06d' % (i+1)
+        for t in ts:
+            j += 1
+            transcript_id = 'peakolator_transcript_%06d' % j
+
+            for (k,exon) in enumerate(t):
+
+                if exon.strand == 0: strand = '+'
+                elif exon.strand == 1: strand = '-'
+                else: strand = '.'
+
+                stdout.write( gtf_fmt.format(
+                                seqname       = exon.seqname,
+                                start         = exon.start + 1,
+                                end           = exon.end   + 1,
+                                strand        = strand,
+                                gene_id       = gene_id,
+                                transcript_id = transcript_id,
+                                exon_number   = k+1 ) )
+
+
+
+
+
+def main():
+
+    desc = 'Given a set of transcribed regions and splice junctions,\n' \
+           'output in GTF format a set of possible transcripts.'''
+
+    ap = argparse.ArgumentParser( description = desc )
+    ap.add_argument( 'trans_fn', metavar='transcribed.bed' )
+    ap.add_argument( 'juncs_fn', metavar='junctions.bed' )
+
+    args = ap.parse_args()
+
+    trans = parse_bed( args.trans_fn )
+    juncs = parse_bed( args.juncs_fn )
+
+    stderr.write( '%d transcribed regions read.\n' % len(trans) )
+    stderr.write( '%d splice junctions read.\n' % len(juncs) )
+
+    # clumps
+    cs = clumps( trans, juncs )
+
+    stderr.write( '%d clumps found.\n' % len(cs) )
+
+    # genes
+    genes = []
+    n = len(cs)
+    for (i,c) in enumerate(cs):
+        stderr.write( '\t%d/%d\n' % (i, n) )
+        genes.extend( c.transcripts() )
+
+    stderr.write( '%d genes assembled with %d transcripts.\n' % \
+                  (len(genes), sum( len(ts) for ts in genes )) )
+
+
+    print_genes( genes )
+
+
+
+if __name__ == '__main__': main()
+
+
