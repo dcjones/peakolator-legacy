@@ -322,16 +322,11 @@ void sequencing_bias::build( const char* ref_fn,
 
 
     /* background sampling */
-    size_t bg_samples = 2; // make this many samples for each read
+    int bg_samples = 2; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
-    pos offset;
     pos bg_pos;
 
-    double alpha; // abundance estimate
-    double alpha_norm;
-    double z;
     
-    int b;
     char*          seqname   = NULL;
     int            seqlen    = 0;
     int            curr_tid  = -1;

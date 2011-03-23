@@ -45,6 +45,7 @@ kmer_matrix::kmer_matrix( const kmer_matrix& M )
 
 size_t kmer_matrix::getn() const { return n; }
 size_t kmer_matrix::getm() const { return m; }
+size_t kmer_matrix::getk() const { return k; }
 
 void kmer_matrix::operator=( const kmer_matrix& M )
 {
@@ -453,7 +454,7 @@ char* motif::print_model_graph( int offset )
     for( j = 0; j < (int)n; j++ ) {
         if( !parents[j*n+j] ) continue;
 
-        for( i = 0; i < n; i++ ) {
+        for( i = 0; i < (int)n; i++ ) {
             if( i == j ) continue;
             if( parents[j*n+i] ) {
                 r = asprintf( &tmp, "n%d -> n%d;\n", i, j );
@@ -661,13 +662,13 @@ void train_motifs( motif& M0, motif& M1,
     /* 0-1 vector giving labeling each sequence as foreground or background */
     int* cs = new int[ n ];
 
-    for( i = 0; i < n; i++ ) {
+    for( i = 0; i < (int)n; i++ ) {
         cs[i] = (*training_seqs)[i]->c;
     }
 
     /* set prior probability of an example being foreground */
     double ws[2];
-    for( i = 0; i < n; i++ ) {
+    for( i = 0; i < (int)n; i++ ) {
         if( cs[i] <= 1 ) ws[cs[i]] += (*training_seqs)[i]->w;
     }
     double prior = ws[1] / (ws[0] + ws[1]);
@@ -732,7 +733,7 @@ void train_motifs( motif& M0, motif& M1,
         for( j = M0.n-1; j >= 0; j-- ) {
 
             if( M0.has_edge( j, j ) ) {
-                if( max_dep_dist == 0 || j <= max_dep_dist ) i_start = 0;
+                if( max_dep_dist == 0 || j <= (int)max_dep_dist ) i_start = 0;
                 else i_start = j - max_dep_dist;
 
                 if( max_dep_dist == 0 ) i_end = M0.n - 1;
@@ -832,8 +833,8 @@ void train_motifs( motif& M0, motif& M1,
         }
 
         /* phase 2: try all possible edge removals */
-        for( j = 0; j < M0.n; j++ ) {
-            for( i = 0; i < M0.n; i++ ) {
+        for( j = 0; j < (int)M0.n; j++ ) {
+            for( i = 0; i < (int)M0.n; i++ ) {
 
                 if( !M0.has_edge( i, j ) ) continue;
                 if( i == j && M0.num_parents(j) > 1 ) continue;
@@ -902,8 +903,8 @@ void train_motifs( motif& M0, motif& M1,
         }
 
         /* phase 3: try all possible edge reversals */
-        for( j = 0; j < M0.n; j++ ) {
-            for( i = 0; i < M0.n; i++ ) {
+        for( j = 0; j < (int)M0.n; j++ ) {
+            for( i = 0; i < (int)M0.n; i++ ) {
 
                 /* skip nonsense reversals */
                 if( i == j ) continue;

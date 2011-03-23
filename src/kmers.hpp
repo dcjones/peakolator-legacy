@@ -40,6 +40,7 @@ class kmer_matrix
 
         size_t getn() const;
         size_t getm() const;
+        size_t getk() const;
 
 
         /* normalize to turn each position into a proper distribution over kmers

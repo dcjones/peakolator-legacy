@@ -18,6 +18,7 @@
 extern "C" {
 #endif
 
+#include "table.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include "samtools/sam.h"
