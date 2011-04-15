@@ -1,5 +1,6 @@
 
 #include "table.h"
+#include "logger.h"
 
 
 
@@ -419,7 +420,7 @@ unsigned int read_counts_total( const struct read_counts* C,
     struct hashed_value* xs = C->xss[strand][tid];
     size_t               m  = C->mss[strand][tid];
 
-    if( m == 0 ) return;
+    if( m == 0 ) return 0;
 
     size_t i = bisect( xs, m, start );
 

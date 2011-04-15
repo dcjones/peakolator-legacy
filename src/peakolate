@@ -760,11 +760,11 @@ def main():
 
     if not isfile( args.reads_fn + '.bai' ):
         msg.write( 'Error: {fn} is not indexed. Run: \'samtools '
-                   ' index {fn}\'\n'.format( args.reads_fn ) )
+                   ' index {fn}\'\n'.format( fn = args.reads_fn ) )
 
     if args.ref_fn is not None and not isfile( args.ref_fn + '.fai' ):
         msg.write( 'Error: {fn} is not indexed. Run: \'samtools '
-                   ' faidx {fn\'\n'.format( args.ref_fn ) )
+                   ' faidx {fn}\'\n'.format( fn = args.ref_fn ) )
 
 
 
