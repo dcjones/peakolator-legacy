@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "common.hpp"
 #include "miscmath.hpp"
+#include "ushuffle.h"
 
 #include <cmath>
 #include <cctype>
@@ -13,52 +14,54 @@
 #include <algorithm>
 using namespace std;
 
-
-/* simply uniform random numbers */
-static double rand_uniform( double a, double b )
-{
-    return a + b * (double)rand() / (double)RAND_MAX;
-}
-
-/* random gaussians (copied from GSL, to avoid dependency) */
-static double rand_gauss( double sigma )
-{
-    double x, y, r2;
-
-    do
-    {
-        /* choose x,y in uniform square (-1,-1) to (+1,+1) */
-        x = -1 + 2 * rand_uniform(0.0,1.0);
-        y = -1 + 2 * rand_uniform(0.0,1.0);
-
-        /* see if it is in the unit circle */
-        r2 = x * x + y * y;
-    }
-    while (r2 > 1.0 || r2 == 0);
-
-    /* Box-Muller transform */
-    return sigma * y * sqrt (-2.0 * log (r2) / r2);
-}
-
-
-static double rand_trunc_gauss( double sigma, double a, double b )
-{
-    double x;
-    do {
-        x = rand_gauss( sigma );
-    } while( x < a || x > b );
-
-    return x;
-}
-
-
-double gauss_pdf (const double x, const double sigma)
-{
-  double u = x / fabs (sigma);
-  double p = (1 / (sqrt (2 * M_PI) * fabs (sigma))) * exp (-u * u / 2);
-  return p;
-}
-
+/*
+ *
+ *[> simply uniform random numbers <]
+ *static double rand_uniform( double a, double b )
+ *{
+ *    return a + b * (double)rand() / (double)RAND_MAX;
+ *}
+ *
+ *[> random gaussians (copied from GSL, to avoid dependency) <]
+ *static double rand_gauss( double sigma )
+ *{
+ *    double x, y, r2;
+ *
+ *    do
+ *    {
+ *        [> choose x,y in uniform square (-1,-1) to (+1,+1) <]
+ *        x = -1 + 2 * rand_uniform(0.0,1.0);
+ *        y = -1 + 2 * rand_uniform(0.0,1.0);
+ *
+ *        [> see if it is in the unit circle <]
+ *        r2 = x * x + y * y;
+ *    }
+ *    while (r2 > 1.0 || r2 == 0);
+ *
+ *    [> Box-Muller transform <]
+ *    return sigma * y * sqrt (-2.0 * log (r2) / r2);
+ *}
+ *
+ *
+ *static double rand_trunc_gauss( double sigma, double a, double b )
+ *{
+ *    double x;
+ *    do {
+ *        x = rand_gauss( sigma );
+ *    } while( x < a || x > b );
+ *
+ *    return x;
+ *}
+ *
+ *
+ *double gauss_pdf (const double x, const double sigma)
+ *{
+ *  double u = x / fabs (sigma);
+ *  double p = (1 / (sqrt (2 * M_PI) * fabs (sigma))) * exp (-u * u / 2);
+ *  return p;
+ *}
+ *
+ */
 
 /* pseudocount used when sampling foreground and background nucleotide * frequencies */
 const double sequencing_bias::pseudocount = 1;
@@ -324,7 +327,6 @@ void sequencing_bias::build( const char* ref_fn,
     /* background sampling */
     int bg_samples = 2; // make this many samples for each read
     int bg_sample_num;           // keep track of the number of samples made
-    pos bg_pos;
 
     
     char*          seqname   = NULL;
@@ -335,6 +337,10 @@ void sequencing_bias::build( const char* ref_fn,
     char* local_seq;
     local_seq = new char[ L + R + 2 ];
     local_seq[L+R+1] = '\0';
+
+    char* local_seq_bg;
+    local_seq_bg = new char[ L + R + 2 ];
+    local_seq_bg[L+R+1] = '\0';
 
 
     for( i = 0; i < N && i < max_reads; i++ ) {
@@ -384,20 +390,9 @@ void sequencing_bias::build( const char* ref_fn,
         /* add a background sequence */
         /* adjust the current read position randomly, and sample */
         for( bg_sample_num = 0; bg_sample_num < bg_samples; ) {
+            ushuffle(local_seq, local_seq_bg, L+1+R, 2);
 
-            bg_pos = S[i].pos + (pos)ceil( rand_trunc_gauss( offset_std, -100, 100 ) );
-
-            if( S[i].strand ) {
-                if( bg_pos < R || bg_pos >= seqlen - L ) continue;
-                memcpy( local_seq, seq + bg_pos - R, (L+1+R)*sizeof(char) );
-                seqrc( local_seq, L+1+R );
-            }
-            else {
-                if( bg_pos < L || bg_pos >= seqlen - R ) continue;
-                memcpy( local_seq, seq + (bg_pos-L), (L+1+R)*sizeof(char) );
-            }
-
-            training_seqs.push_back( new sequence( local_seq, 0 ) );
+            training_seqs.push_back( new sequence( local_seq_bg, 0 ) );
             bg_sample_num++;
         }
     }

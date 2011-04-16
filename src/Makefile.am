@@ -7,6 +7,7 @@ pyexec_LTLIBRARIES = peakolator.la
 
 peakolator_la_SOURCES = table.h             table.c \
 						logger.h            logger.c \
+						ushuffle.h          ushuffle.c \
 						miscmath.hpp        miscmath.cpp \
 						annotations.hpp     annotations.cpp \
 						common.hpp          common.cpp \
@@ -44,6 +45,7 @@ peakolate_seqbias_SOURCES = peakolate_seqbias.pyx \
 							miscmath.hpp        miscmath.cpp \
 							logger.h            logger.c \
 							table.h             table.c \
+							ushuffle.h          ushuffle.c \
 							kmers.hpp           kmers.cpp \
 							intervals.hpp       intervals.cpp
 
